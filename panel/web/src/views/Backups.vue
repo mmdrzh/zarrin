@@ -52,7 +52,8 @@
         <label class="row mb"><input type="checkbox" v-model="dialog.pasarguard" /> دیتابیس پاسارگاد (کاربرها، ادمین‌ها، نودها، ...)</label>
         <label class="row mb"><input type="checkbox" v-model="dialog.files" /> فایل‌های پاسارگاد (گواهی‌های SSL و قالب صفحه‌ی ساب)</label>
         <label class="row mb"><input type="checkbox" v-model="dialog.zarrin" /> اطلاعات زرین (ادمین زرین، نودها، تنظیمات)</label>
-        <p class="muted small">فایل .env پاسارگاد جایگزین نمی‌شود (رمز دیتابیس سرور فعلی را دارد)؛ نسخه‌ی داخل بکاپ کنارش با نام <span class="mono">.env.from-backup-…</span> ذخیره می‌شود.</p>
+        <label class="row mb"><input type="checkbox" v-model="dialog.env" /> تنظیمات .env پاسارگاد، به‌جز دیتابیس (مسیر ساب، SSL، قالب‌ها، ...)</label>
+        <p class="muted small">برای انتقال به سرور جدید هر چهار گزینه را بزنید. اطلاعات اتصال به دیتابیس (DB_*) همیشه مال همین سرور می‌ماند.</p>
         <label class="field"><span>برای تأیید عبارت RESTORE را بنویسید</span><input v-model="dialog.confirm" class="ltr" /></label>
         <div v-if="dialog.error" class="alert bad">{{ dialog.error }}</div>
         <div class="row"><button class="btn danger solid" :disabled="dialog.confirm !== 'RESTORE'">شروع ریستور</button>
@@ -108,12 +109,12 @@ async function upload() {
   } catch (e) { alert(e.message) } finally { uploading.value = false }
 }
 function askRestore(source, name) {
-  dialog.value = { source, name, pasarguard: true, files: true, zarrin: false, confirm: '', error: '' }
+  dialog.value = { source, name, pasarguard: true, files: true, env: false, zarrin: false, confirm: '', error: '' }
 }
 async function doRestore() {
   try {
-    const { source, name, pasarguard, files, zarrin, confirm } = dialog.value
-    await api.post('/api/restore', { source, name, pasarguard, files, zarrin, confirm })
+    const { source, name, pasarguard, files, env, zarrin, confirm } = dialog.value
+    await api.post('/api/restore', { source, name, pasarguard, files, env, zarrin, confirm })
     dialog.value = null
     toast('ریستور شروع شد')
     load()

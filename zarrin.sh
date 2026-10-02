@@ -83,9 +83,10 @@ cmd_restore_run() {
   req="$DIR/data/restore/request.running.json"
   trap 'status failed "خطا: ریستور متوقف شد (جزئیات: journalctl -u zarrin-restore)"; compose_pg up -d >/dev/null 2>&1 || true; rm -rf "$work"' ERR
 
-  local file pg zr files
+  local file pg zr files envm
   file=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["file"])' "$req")
   files=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1])).get("files", False)))' "$req")
+  envm=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1])).get("env", False)))' "$req")
   pg=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["pasarguard"]))' "$req")
   zr=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["zarrin"]))' "$req")
   case "$file" in *..*|/*) status failed "مسیر فایل نامعتبر"; exit 1;; esac
@@ -94,12 +95,13 @@ cmd_restore_run() {
 
   rm -rf "$work"; mkdir -p "$work"
   tar -xzf "$archive" -C "$work" manifest.json $( [ "$pg" = 1 ] && echo pasarguard.dump ) $( [ "$zr" = 1 ] && echo zarrin.db ) \
-    $( [ "$files" = 1 ] && echo pasarguard-data pasarguard )
+    $( [ "$files" = 1 ] && echo pasarguard-data ) $( [ "$files" = 1 ] || [ "$envm" = 1 ] && echo pasarguard )
   local ts; ts=$(date +%Y%m%d%H%M%S)
 
   if [ "$files" = 1 ]; then restore_files "$work" "$ts"; fi
+  if [ "$envm" = 1 ]; then merge_env "$work/pasarguard/.env" "$ts"; fi
   if [ "$pg" = 1 ]; then restore_pasarguard "$work/pasarguard.dump" "$ts" "$work/manifest.json"; fi
-  if [ "$files" = 1 ] && [ "$pg" != 1 ]; then
+  if { [ "$files" = 1 ] || [ "$envm" = 1 ]; } && [ "$pg" != 1 ]; then
     PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
     compose_pg restart $(compose_pg config --services | grep -vE 'timescale|postgres|^db$|pgadmin') >/dev/null 2>&1 || true
   fi
@@ -210,8 +212,45 @@ restore_files() {
   done
   if [ -f "$work/pasarguard/.env" ]; then
     install -m 600 "$work/pasarguard/.env" "$PG_DIR/.env.from-backup-$ts"
-    status running ".env بکاپ در $PG_DIR/.env.from-backup-$ts ذخیره شد (جایگزین نشد)."
   fi
+}
+
+# The backup's PasarGuard settings into this server's .env, except what ties
+# it to this server's database (DB_*, SQLALCHEMY_*, ...): those keep their
+# current values, or the panel could not reach its own database.
+merge_env() {
+  local src=$1 ts=$2
+  PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
+  [ -f "$src" ] || { status running "بکاپ .env پاسارگاد ندارد؛ رد شد"; return; }
+  status running "ادغام تنظیمات .env پاسارگاد (به‌جز دیتابیس)..."
+  cp -a "$PG_DIR/.env" "$PG_DIR/.env.before-restore-$ts"
+  python3 - "$PG_DIR/.env" "$src" <<'PY'
+import re, sys
+cur_path, src_path = sys.argv[1:3]
+KEEP = re.compile(r"^(DB_|SQLALCHEMY_|POSTGRES|MYSQL|MARIADB|PGADMIN_)")
+LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
+def parse(path):
+    out = {}
+    for line in open(path, encoding="utf-8").read().splitlines():
+        m = LINE.match(line)
+        if m:
+            out[m.group(1)] = line
+    return out
+backup = {k: v for k, v in parse(src_path).items() if not KEEP.match(k)}
+lines, seen = [], set()
+for line in open(cur_path, encoding="utf-8").read().splitlines():
+    m = LINE.match(line)
+    if m and m.group(1) in backup:
+        lines.append(backup[m.group(1)]); seen.add(m.group(1))
+    else:
+        lines.append(line)
+added = [v for k, v in backup.items() if k not in seen]
+if added:
+    lines += ["", "# from Zarrin backup"] + added
+open(cur_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+print(f"{len(seen)} replaced, {len(added)} added")
+PY
+  status running ".env ادغام شد (نسخه‌ی قبلی: .env.before-restore-$ts)"
 }
 
 cmd_subpage() {

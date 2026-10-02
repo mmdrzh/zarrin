@@ -501,6 +501,7 @@ class RestoreIn(BaseModel):
     pasarguard: bool = True
     zarrin: bool = False
     files: bool = False
+    env: bool = False
     confirm: str
 
 
@@ -508,7 +509,7 @@ class RestoreIn(BaseModel):
 async def restore(body: RestoreIn, request: Request, admin=Admin):
     if body.confirm != "RESTORE":
         raise HTTPException(400, "برای تأیید RESTORE را بنویسید")
-    if not (body.pasarguard or body.zarrin or body.files):
+    if not (body.pasarguard or body.zarrin or body.files or body.env):
         raise HTTPException(400, "چیزی برای ریستور انتخاب نشده")
     if body.source == "backup":
         try:
@@ -522,12 +523,13 @@ async def restore(body: RestoreIn, request: Request, admin=Admin):
         if not path.exists():
             raise HTTPException(404)
     try:
-        backup.request_restore(path, {"pasarguard": body.pasarguard, "zarrin": body.zarrin, "files": body.files},
+        backup.request_restore(path, {"pasarguard": body.pasarguard, "zarrin": body.zarrin, "files": body.files,
+                                      "env": body.env},
                                admin["username"])
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(400, str(exc))
     await store.audit(admin["username"], client_ip(request), "restore.request",
-                      f"{body.source}:{body.name} pg={body.pasarguard} zarrin={body.zarrin} files={body.files}")
+                      f"{body.source}:{body.name} pg={body.pasarguard} zarrin={body.zarrin} files={body.files} env={body.env}")
     return {"ok": True}
 
 

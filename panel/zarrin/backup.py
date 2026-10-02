@@ -205,7 +205,8 @@ def request_restore(path: Path, parts: dict, admin: str) -> None:
         if parts.get("files") and not any(n.startswith("pasarguard-data/") for n in names):
             raise ValueError("این بکاپ فایل‌های پاسارگاد ندارد")
     request = {"file": str(path.relative_to(config.DATA)), "pasarguard": bool(parts.get("pasarguard")),
-               "zarrin": bool(parts.get("zarrin")), "files": bool(parts.get("files")), "admin": admin,
+               "zarrin": bool(parts.get("zarrin")), "files": bool(parts.get("files")),
+               "env": bool(parts.get("env")), "admin": admin,
                "at": int(time.time())}
     (config.RESTORE_DIR / "status.json").write_text(json.dumps({"state": "requested", "at": int(time.time()),
                                                                  "log": ["درخواست ثبت شد؛ منتظر سرویس میزبان..."]}))
