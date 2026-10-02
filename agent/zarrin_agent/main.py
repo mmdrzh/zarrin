@@ -24,7 +24,7 @@ from .l2tp import L2TP
 from .panel import panel
 from .usage import Usage
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 log = logging.getLogger("zarrin.agent")

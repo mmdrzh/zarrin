@@ -166,6 +166,8 @@ name = zarrin
 ppp debug = no
 pppoptfile = {PPP_OPTIONS}
 length bit = yes
+; The client's address reaches pppd's ip-up as ipparam, for the online list.
+pass peer = yes
 """)
         dns = [d.strip() for d in self.dns.split(",") if d.strip()][:2] or ["8.8.8.8"]
         PPP_OPTIONS.write_text("\n".join([
