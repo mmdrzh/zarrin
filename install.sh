@@ -17,7 +17,9 @@ command -v docker >/dev/null || die "Docker is not installed (PasarGuard should 
 
 PG_DIR=${PASARGUARD_HOST_DIR:-/opt/pasarguard}
 [ -f "$PG_DIR/.env" ] || die "PasarGuard not found in $PG_DIR (set PASARGUARD_HOST_DIR)."
-pg_env() { grep -E "^\s*$1\s*=" "$PG_DIR/.env" | head -1 | cut -d= -f2- | sed -e 's/^ *//' -e 's/ *$//' -e 's/^"//' -e 's/"$//'; }
+# A key missing from PasarGuard's .env (a default install has no SUBSCRIPTION_PATH
+# or SSL keys) must read as empty, not stop the script under pipefail.
+pg_env() { { grep -E "^\s*$1\s*=" "$PG_DIR/.env" || true; } | head -1 | cut -d= -f2- | sed -e 's/^ *//' -e 's/ *$//' -e 's/^"//' -e 's/"$//'; }
 
 # ---------------------------------------------------------------- PasarGuard
 DB_URL=$(pg_env SQLALCHEMY_DATABASE_URL)
@@ -29,7 +31,7 @@ if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
 fi
 DBC=$(docker ps --filter "label=com.docker.compose.project.working_dir=$PG_DIR" --format '{{.Names}} {{.Image}}' | awk '/timescale|postgres/{print $1; exit}')
 [ -n "$DBC" ] || die "PasarGuard's database container is not running."
-DB_PORT=$(docker port "$DBC" 5432/tcp 2>/dev/null | grep -oE '127\.0\.0\.1:[0-9]+' | head -1 | cut -d: -f2)
+DB_PORT=$(docker port "$DBC" 5432/tcp 2>/dev/null | { grep -oE '127\.0\.0\.1:[0-9]+' || true; } | head -1 | cut -d: -f2)
 [ -n "$DB_PORT" ] || die "PasarGuard's database is not published on 127.0.0.1 (needed by Zarrin)."
 PG_PORT=$(pg_env UVICORN_PORT); PG_PORT=${PG_PORT:-8000}
 SUB_PATH=$(pg_env SUBSCRIPTION_PATH); SUB_PATH=${SUB_PATH:-sub}

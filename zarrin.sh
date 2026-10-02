@@ -14,7 +14,7 @@ DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 cd "$DIR"
 [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
 
-env_get() { grep -E "^$1=" "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
+env_get() { { grep -E "^$1=" "$DIR/.env" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
 compose() { docker compose -f "$DIR/docker-compose.yml" "$@"; }
 
 cmd_status() {
@@ -124,8 +124,8 @@ restore_pasarguard() {
   local dump=$1 ts=$2 manifest=$3
   PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
   local db_user db_name dbc
-  db_user=$(grep -E '^DB_USER' "$PG_DIR/.env" | head -1 | cut -d= -f2- | tr -d ' "')
-  db_name=$(grep -E '^DB_NAME' "$PG_DIR/.env" | head -1 | cut -d= -f2- | tr -d ' "')
+  db_user=$({ grep -E '^DB_USER' "$PG_DIR/.env" || true; } | head -1 | cut -d= -f2- | tr -d ' "')
+  db_name=$({ grep -E '^DB_NAME' "$PG_DIR/.env" || true; } | head -1 | cut -d= -f2- | tr -d ' "')
   dbc=$(docker ps --filter "label=com.docker.compose.project.working_dir=$PG_DIR" --format '{{.Names}} {{.Image}}' | awk '/timescale|postgres/{print $1; exit}')
   [ -n "$dbc" ] && [ -n "$db_user" ] && [ -n "$db_name" ] || { status failed "دیتابیس پاسارگاد پیدا نشد"; exit 1; }
   local psql=(docker exec -i "$dbc" psql -v ON_ERROR_STOP=1 -U "$db_user" -qAt)
