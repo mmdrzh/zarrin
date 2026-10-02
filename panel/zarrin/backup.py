@@ -50,6 +50,20 @@ def _sqlite_copy(dest: Path) -> None:
     dst.close()
 
 
+async def _pg_versions() -> dict:
+    """PostgreSQL and TimescaleDB versions, so a restore can create the same
+    extension version before loading the dump (and update it afterwards)."""
+    import asyncpg
+    conn = await asyncpg.connect(_dsn_for_libpq(config.PG_OWNER_DSN))
+    try:
+        return {
+            "postgres_version": await conn.fetchval("SHOW server_version"),
+            "timescaledb_version": await conn.fetchval("SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'"),
+        }
+    finally:
+        await conn.close()
+
+
 def list_backups() -> list[dict]:
     config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     out = []
@@ -77,7 +91,9 @@ async def create_backup(reason: str = "manual") -> Path:
         work.mkdir()
         try:
             contents = []
+            versions = {}
             if config.PG_OWNER_DSN:
+                versions = await _pg_versions()
                 await _run("pg_dump", "--format=custom", "--compress=6", "--file", str(work / "pasarguard.dump"),
                            "--dbname", _dsn_for_libpq(config.PG_OWNER_DSN))
                 contents.append("pasarguard.dump")
@@ -103,6 +119,7 @@ async def create_backup(reason: str = "manual") -> Path:
                 "domain": config.DOMAIN,
                 "reason": reason,
                 "contents": contents,
+                **versions,
             }
             (work / "manifest.json").write_text(json.dumps(manifest, indent=2))
             final = config.BACKUP_DIR / f"zarrin-backup-{stamp}.tar.gz"

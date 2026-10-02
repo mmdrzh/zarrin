@@ -98,7 +98,7 @@ cmd_restore_run() {
   local ts; ts=$(date +%Y%m%d%H%M%S)
 
   if [ "$files" = 1 ]; then restore_files "$work" "$ts"; fi
-  if [ "$pg" = 1 ]; then restore_pasarguard "$work/pasarguard.dump" "$ts"; fi
+  if [ "$pg" = 1 ]; then restore_pasarguard "$work/pasarguard.dump" "$ts" "$work/manifest.json"; fi
   if [ "$files" = 1 ] && [ "$pg" != 1 ]; then
     PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
     compose_pg restart $(compose_pg config --services | grep -vE 'timescale|postgres|^db$|pgadmin') >/dev/null 2>&1 || true
@@ -121,7 +121,7 @@ PG_DIR=""
 compose_pg() { docker compose --project-directory "$PG_DIR" -f "$PG_DIR/docker-compose.yml" "$@"; }
 
 restore_pasarguard() {
-  local dump=$1 ts=$2
+  local dump=$1 ts=$2 manifest=$3
   PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
   local db_user db_name dbc
   db_user=$(grep -E '^DB_USER' "$PG_DIR/.env" | head -1 | cut -d= -f2- | tr -d ' "')
@@ -138,15 +138,32 @@ restore_pasarguard() {
 
   status running "بازگردانی در یک دیتابیس موقت (پاسارگاد هنوز روشن است)..."
   docker cp "$dump" "$dbc:/tmp/zarrin-restore.dump"
-  "${psql[@]}" -d postgres -c "DROP DATABASE IF EXISTS $tmp" -c "CREATE DATABASE $tmp OWNER \"$db_user\""
-  local has_ts
+  # template0: template1 may already carry a (newer) timescaledb extension.
+  "${psql[@]}" -d postgres -c "DROP DATABASE IF EXISTS $tmp" -c "CREATE DATABASE $tmp TEMPLATE template0 OWNER \"$db_user\""
+  local has_ts ts_ver ts_have
   has_ts=$("${psql[@]}" -d postgres -c "SELECT count(*) FROM pg_available_extensions WHERE name='timescaledb'")
+  ts_ver=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("timescaledb_version") or "")' "$manifest" 2>/dev/null || true)
   if [ "$has_ts" = 1 ]; then
-    "${psql[@]}" -d "$tmp" -c "CREATE EXTENSION IF NOT EXISTS timescaledb" -c "SELECT timescaledb_pre_restore()" >/dev/null
+    ts_have=""
+    if [[ "$ts_ver" =~ ^[0-9.]+$ ]]; then
+      ts_have=$("${psql[@]}" -d postgres -c "SELECT count(*) FROM pg_available_extension_versions WHERE name='timescaledb' AND version='$ts_ver'")
+    fi
+    if [ "$ts_have" = 1 ]; then
+      "${psql[@]}" -d "$tmp" -c "CREATE EXTENSION timescaledb VERSION '$ts_ver'" >/dev/null
+      status running "TimescaleDB $ts_ver (همان نسخه‌ی بکاپ)"
+    else
+      "${psql[@]}" -d "$tmp" -c "CREATE EXTENSION IF NOT EXISTS timescaledb" >/dev/null
+      [ -n "$ts_ver" ] && status running "هشدار: TimescaleDB $ts_ver روی این سرور نیست؛ با نسخه‌ی موجود ادامه می‌دهیم"
+    fi
+    "${psql[@]}" -d "$tmp" -c "SELECT timescaledb_pre_restore()" >/dev/null
   fi
   docker exec "$dbc" pg_restore -U "$db_user" -d "$tmp" --no-owner --no-privileges -j 4 /tmp/zarrin-restore.dump \
     > "$DIR/data/restore/pg_restore.log" 2>&1 || true
-  [ "$has_ts" = 1 ] && "${psql[@]}" -d "$tmp" -c "SELECT timescaledb_post_restore()" >/dev/null
+  if [ "$has_ts" = 1 ]; then
+    "${psql[@]}" -d "$tmp" -c "SELECT timescaledb_post_restore()" >/dev/null
+    # Then up to the newest version this server has (a no-op when equal).
+    docker exec -i "$dbc" psql -X -U "$db_user" -d "$tmp" -qAt -c "ALTER EXTENSION timescaledb UPDATE" >/dev/null 2>&1 || true
+  fi
   docker exec "$dbc" rm -f /tmp/zarrin-restore.dump
   local users
   users=$("${psql[@]}" -d "$tmp" -c "SELECT count(*) FROM users" 2>/dev/null || echo "")
