@@ -103,7 +103,7 @@ cmd_restore_run() {
   if [ "$pg" = 1 ]; then restore_pasarguard "$work/pasarguard.dump" "$ts" "$work/manifest.json"; fi
   if { [ "$files" = 1 ] || [ "$envm" = 1 ]; } && [ "$pg" != 1 ]; then
     PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
-    compose_pg restart $(compose_pg config --services | grep -vE 'timescale|postgres|^db$|pgadmin') >/dev/null 2>&1 || true
+    compose_pg up -d --force-recreate $(compose_pg config --services | grep -vE 'timescale|postgres|^db$|pgadmin') >/dev/null 2>&1 || true
   fi
   if [ "$zr" = 1 ]; then
     status running "ریستور اطلاعات زرین..."
@@ -185,7 +185,9 @@ restore_pasarguard() {
     -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db_name' AND pid <> pg_backend_pid()" \
     -c "ALTER DATABASE \"$db_name\" RENAME TO \"$old\"" \
     -c "ALTER DATABASE $tmp RENAME TO \"$db_name\"" >/dev/null
-  compose_pg start $services
+  # Recreated, not just started: Docker reads .env only when it creates a
+  # container, and a merged .env must take effect.
+  compose_pg up -d --force-recreate $services >/dev/null 2>&1
   status running "دسترسی زرین روی دیتابیس جدید..."
   sleep 3
   compose exec -T zarrin python -m zarrin.cli grant >/dev/null || true
