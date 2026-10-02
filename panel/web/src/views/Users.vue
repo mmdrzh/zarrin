@@ -4,6 +4,8 @@
     <div class="card mb">
       <input v-model="q" class="ltr" placeholder="نام کاربری (حداقل ۲ حرف)..." @input="search" autofocus />
       <div class="hint">کاربرها در پاسارگاد ساخته و مدیریت می‌شوند؛ اینجا اطلاعات اتصال زرین هر کاربر را می‌بینید.</div>
+      <div v-if="info" class="small mt">سرور: <span class="mono">{{ info.server || '—' }}</span> ·
+        کلید L2TP (PSK): <span class="mono">{{ info.l2tp_psk }}</span> <button class="btn sm" @click="doCopy(info.l2tp_psk)">کپی</button></div>
     </div>
     <div v-if="loading" class="empty">...</div>
     <div v-else-if="q.length >= 2 && !results.length" class="empty">کاربری پیدا نشد</div>
@@ -33,13 +35,15 @@
 </template>
 
 <script setup>
-import { ref, inject } from 'vue'
+import { ref, inject, onMounted } from 'vue'
 import { api, num, bytes, date, ago, duration, copy, PROTO, USER_STATUS } from '../api'
 
 const toast = inject('toast')
 const q = ref('')
 const results = ref([])
 const loading = ref(false)
+const info = ref(null)
+onMounted(async () => { info.value = await api.get('/api/connection-info').catch(() => null) })
 let timer
 
 function search() {

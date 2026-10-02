@@ -13,15 +13,22 @@ from pathlib import Path
 
 log = logging.getLogger("zarrin.firewall")
 
-CHAINS = (("filter", "FORWARD", "ZARRIN-FWD"), ("nat", "POSTROUTING", "ZARRIN-NAT"), ("mangle", "FORWARD", "ZARRIN-MSS"))
+CHAINS = (("filter", "FORWARD", "ZARRIN-FWD"), ("nat", "POSTROUTING", "ZARRIN-NAT"), ("mangle", "FORWARD", "ZARRIN-MSS"),
+          ("filter", "INPUT", "ZARRIN-IN"))
 
 
 def run(*cmd: str, check: bool = False) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, check=check)
 
 
-def _rules(pools: list[str], mss: str) -> dict[str, list[list[str]]]:
-    body = {"ZARRIN-FWD": [], "ZARRIN-NAT": [], "ZARRIN-MSS": []}
+def _rules(pools: list[str], mss: str, l2tp: bool) -> dict[str, list[list[str]]]:
+    body = {"ZARRIN-FWD": [], "ZARRIN-NAT": [], "ZARRIN-MSS": [], "ZARRIN-IN": []}
+    if l2tp:
+        # L2TP itself is unencrypted: accept it only from inside IPsec.
+        body["ZARRIN-IN"] = [
+            ["-p", "udp", "--dport", "1701", "-m", "policy", "--dir", "in", "--pol", "ipsec", "-j", "RETURN"],
+            ["-p", "udp", "--dport", "1701", "-j", "DROP"],
+        ]
     for pool in pools:
         body["ZARRIN-FWD"] += [["-s", pool, "-j", "ACCEPT"], ["-d", pool, "-j", "ACCEPT"]]
         body["ZARRIN-NAT"] += [["-s", pool, "!", "-d", pool, "-j", "MASQUERADE"]]
@@ -32,13 +39,13 @@ def _rules(pools: list[str], mss: str) -> dict[str, list[list[str]]]:
     return body
 
 
-def ensure(pools: list[str], mss: str = "1250") -> None:
+def ensure(pools: list[str], mss: str = "1250", l2tp: bool = False) -> None:
     """Idempotent: a chain is rebuilt only when it does not hold exactly the
     rules for these pools, and the jump into it is put back if something
     (a Docker restart) removed it."""
     if Path("/proc/sys/net/ipv4/ip_forward").read_text().strip() != "1":
         run("sysctl", "-w", "net.ipv4.ip_forward=1")
-    body = _rules(pools, mss)
+    body = _rules(pools, mss, l2tp)
     for table, parent, chain in CHAINS:
         listing = run("iptables", "-t", table, "-S", chain)
         if listing.returncode != 0:
@@ -46,12 +53,12 @@ def ensure(pools: list[str], mss: str = "1250") -> None:
             have = []
         else:
             have = [ln for ln in listing.stdout.splitlines() if ln.startswith("-A ")]
-        ok = len(have) == len(body[chain]) and all(any(p in ln for ln in have) for p in pools)
+        ok = len(have) == len(body[chain]) and (chain == "ZARRIN-IN" or all(any(p in ln for ln in have) for p in pools))
         if not ok:
             run("iptables", "-t", table, "-F", chain)
             for rule in body[chain]:
                 run("iptables", "-t", table, "-A", chain, *rule, check=True)
-            log.info("firewall: %s rebuilt for %s", chain, ", ".join(pools) or "no pools")
+            log.info("firewall: %s rebuilt (%s)", chain, ", ".join(pools) or "no pools")
         if run("iptables", "-t", table, "-C", parent, "-j", chain).returncode != 0:
             run("iptables", "-t", table, "-I", parent, "1", "-j", chain, check=True)
 

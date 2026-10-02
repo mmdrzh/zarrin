@@ -305,9 +305,15 @@ async def users(q: str = "", admin=Admin):
     return [_user_view(r, set(allowed), sessions) for r in await pg.search_users(q)]
 
 
+@router.get("/connection-info")
+async def connection_info(admin=Admin):
+    """What a user needs besides username and password, for the user page."""
+    return {"server": await store.get("ikev2_domain"), "l2tp_psk": await store.get("l2tp_psk")}
+
+
 # --------------------------------------------------------------- settings
 
-EDITABLE = {"ikev2_domain", "dns", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
+EDITABLE = {"ikev2_domain", "dns", "l2tp_psk", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
             "backup_interval_hours", "backup_keep", "pasarguard_api_key"}
 
 
@@ -339,6 +345,10 @@ async def put_settings(body: dict, request: Request, admin=Admin):
             value = max(0.0, min(168.0, float(value or 0)))
         elif key == "backup_keep":
             value = max(1, min(500, int(value or 24)))
+        elif key == "l2tp_psk":
+            value = str(value or "").strip()
+            if not (8 <= len(value) <= 64) or not value.isascii() or '"' in value or " " in value:
+                raise HTTPException(400, "کلید L2TP باید ۸ تا ۶۴ کاراکتر انگلیسی بدون فاصله باشد")
         else:
             value = str(value or "").strip()[:4096]
         await store.set(key, value)

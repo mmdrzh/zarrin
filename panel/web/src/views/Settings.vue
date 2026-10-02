@@ -9,6 +9,9 @@
           <div class="hint">در کلودفلر با ابر خاکستری (DNS only) به IP همه‌ی نودها اشاره کند.</div></label>
         <label class="field"><span>DNS برای کاربران VPN</span>
           <input v-model="s.dns" class="ltr" placeholder="8.8.8.8,1.1.1.1" /></label>
+        <label class="field"><span>کلید مشترک L2TP (Pre-shared key)</span>
+          <input v-model="s.l2tp_psk" class="ltr mono" autocomplete="off" />
+          <div class="hint">برای همه‌ی کاربران و نودها یکی است. با عوض کردنش، همه‌ی کاربران L2TP باید کلید را در دستگاهشان عوض کنند.</div></label>
       </div>
 
       <div class="card">

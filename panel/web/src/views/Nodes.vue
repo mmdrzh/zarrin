@@ -16,7 +16,7 @@
       <div v-if="!nodes.length" class="empty">نودی ثبت نشده. «افزودن نود» را بزنید.</div>
       <div v-else class="table-wrap">
         <table>
-          <thead><tr><th>نام</th><th>IP</th><th>وضعیت</th><th>آنلاین</th><th>نود پاسارگاد</th><th>IKEv2</th><th>ایجنت</th><th></th></tr></thead>
+          <thead><tr><th>نام</th><th>IP</th><th>وضعیت</th><th>آنلاین</th><th>نود پاسارگاد</th><th>IKEv2</th><th>L2TP</th><th>ایجنت</th><th></th></tr></thead>
           <tbody>
             <tr v-for="n in nodes" :key="n.id">
               <td><b>{{ n.name }}</b></td>
@@ -33,6 +33,11 @@
               <td>
                 <label class="row small"><input type="checkbox" :checked="n.settings?.ikev2?.enabled !== false" :disabled="n.legacy"
                   @change="toggle(n, 'ikev2', $event.target.checked)" /> فعال</label>
+              </td>
+              <td>
+                <label class="row small"><input type="checkbox" :checked="n.settings?.l2tp?.enabled === true" :disabled="n.legacy"
+                  @change="toggle(n, 'l2tp', $event.target.checked)" /> فعال</label>
+                <div v-if="n.status?.services?.l2tp" class="small" style="color:var(--ok)">در حال اجرا</div>
               </td>
               <td><span v-if="n.legacy" class="badge warn">قدیمی (pg-ikev2)</span><span v-else class="badge info">v{{ n.agent_version || '?' }}</span></td>
               <td class="row" style="flex-wrap:nowrap">

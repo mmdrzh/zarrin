@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS wg_peers (
 DEFAULTS: dict[str, Any] = {
     "ikev2_domain": "",
     "dns": "8.8.8.8,1.1.1.1",
+    "l2tp_psk": "",
     "telegram_bot_token": "",
     "telegram_chat_id": "",
     "telegram_proxy": "",

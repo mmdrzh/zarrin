@@ -23,7 +23,7 @@ log = logging.getLogger("zarrin.agent")
 router = APIRouter()
 
 CHAIN_FILE = config.DATA / "chain.pem"
-DEFAULT_POOLS = {"ikev2": "10.66.0.0/16"}
+DEFAULT_POOLS = {"ikev2": "10.66.0.0/16", "l2tp": "10.67.0.0/16"}
 
 
 async def node_from_request(request: Request) -> dict:
@@ -76,6 +76,7 @@ async def node_config(node: dict) -> dict:
     own = json.loads(node["settings"] or "{}")
     peers = [r["ip"] for r in await store.fetchall("SELECT ip FROM nodes WHERE id != ?", node["id"])]
     ikev2 = own.get("ikev2", {})
+    l2tp = own.get("l2tp", {})
     return {
         "node": {"id": node["id"], "name": node["name"], "ip": node["ip"]},
         "dns": settings["dns"],
@@ -85,6 +86,12 @@ async def node_config(node: dict) -> dict:
             "enabled": ikev2.get("enabled", True),
             "server_id": settings["ikev2_domain"] or node["ip"],
             "pool": ikev2.get("pool", DEFAULT_POOLS["ikev2"]),
+        },
+        "l2tp": {
+            # Off until turned on per node in the panel.
+            "enabled": bool(l2tp.get("enabled", False)) and bool(settings["l2tp_psk"]),
+            "pool": l2tp.get("pool", DEFAULT_POOLS["l2tp"]),
+            "psk": settings["l2tp_psk"],
         },
     }
 

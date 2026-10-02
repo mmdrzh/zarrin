@@ -4,6 +4,7 @@ bridge API on LEGACY_PORT, served from one process."""
 import asyncio
 import contextlib
 import logging
+import secrets
 import signal
 
 import uvicorn
@@ -86,6 +87,11 @@ class Server(uvicorn.Server):
 async def run() -> None:
     await store.open()
     await pg.open()
+    if not await store.get("l2tp_psk"):
+        # One pre-shared key for every node: clients reach any of them by one name.
+        # Letters and digits only, without look-alikes, so it is easy to type.
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+        await store.set("l2tp_psk", "".join(secrets.choice(alphabet) for _ in range(12)))
     certs.ensure_present()
 
     main_cfg = uvicorn.Config(main_app(), host="0.0.0.0", port=config.PORT, ssl_certfile=str(certs.FULLCHAIN),

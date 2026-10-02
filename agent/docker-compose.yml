@@ -9,6 +9,9 @@ services:
     # Host network: charon answers on the node's own UDP 500/4500.
     network_mode: host
     cap_add: [NET_ADMIN, NET_RAW]
+    # L2TP: pppd needs the host's PPP device.
+    devices:
+      - /dev/ppp:/dev/ppp
     env_file: .env
     stop_grace_period: 30s
     volumes:

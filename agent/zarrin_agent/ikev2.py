@@ -1,5 +1,4 @@
-"""IKEv2 (EAP-MSCHAPv2 username/password) with strongSwan 5.9's charon,
-driven over VICI.
+"""IKEv2 (EAP-MSCHAPv2 username/password) on the shared charon.
 
 Proposals and settings are the ones proven on Iranian mobile networks:
 modp4096 first (Android asks for it first), modp1024 fallbacks for Windows'
@@ -9,37 +8,25 @@ native client, fragmentation and send_cert=always for iOS.
 import ipaddress
 import logging
 import re
-import socket
-import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import vici
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from . import acme
+from .charon import charon, text
 
 log = logging.getLogger("zarrin.ikev2")
 
-SWANCTL = Path("/etc/swanctl")
-CHARON = "/usr/libexec/ipsec/charon"
-VICI_SOCKET = "/var/run/charon.vici"
 CONN = "zarrin-ikev2"
 SECRET_PREFIX = "zr-"
 SELF_DIR = Path("/data/ikev2-self")
 USERNAME_OK = re.compile(r"^[A-Za-z0-9_.@-]{1,128}$")
-CERT_RE = re.compile(rb"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----\n?", re.S)
-
-
-def session() -> vici.Session:
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(VICI_SOCKET)
-    return vici.Session(sock)
 
 
 def self_signed(server_id: str) -> tuple[bytes, bytes]:
@@ -82,116 +69,64 @@ class IKEv2:
     name = "ikev2"
 
     def __init__(self) -> None:
-        self.proc: subprocess.Popen | None = None
+        self.enabled = False
         self.server_id = ""
         self.pool = ""
         self.dns = ""
         self.allowed: dict[str, str] = {}
-        self.loaded: dict[str, str] = {}
-        self.closed_events: list[tuple[str, str, int, int]] = []  # (user, child id, in, out)
+        self.closed_events: list[tuple[str, str, int, int]] = []  # (user, counter key, in, out)
         self.lock = threading.Lock()
-        self.listener: threading.Thread | None = None
-        self.stopping = threading.Event()
-
-    # ------------------------------------------------------------ lifecycle
+        charon.listeners.append(self._on_event)
 
     @property
     def running(self) -> bool:
-        return self.proc is not None and self.proc.poll() is None
+        return self.enabled and charon.running
+
+    @property
+    def proc(self):
+        return charon.proc if self.enabled else None
 
     def start(self, cfg: dict, dns: str) -> None:
         self.server_id, self.pool, self.dns = cfg["server_id"], cfg["pool"], dns
+        self.enabled = True
         self.install_certificate()
-        self.write_conf()
-        for stale in ("/var/run/charon.pid", "/var/run/charon.ctl", VICI_SOCKET):
-            Path(stale).unlink(missing_ok=True)
-        self.proc = subprocess.Popen([CHARON])
-        for _ in range(100):
-            if Path(VICI_SOCKET).exists():
-                try:
-                    session().version()
-                    break
-                except Exception:
-                    pass
-            time.sleep(0.2)
-        # Connections, pools, certificate and key. User secrets go over VICI
-        # afterwards; swanctl --load-creds would unload them, so it runs only here.
-        out = subprocess.run(["swanctl", "--load-all", "--noprompt"], capture_output=True, text=True)
-        log.info("swanctl --load-all: %s", out.stdout.strip().replace("\n", "; ") or out.stderr.strip())
-        self.loaded = {}
-        self.stopping.clear()
-        self.listener = threading.Thread(target=self._listen, daemon=True)
-        self.listener.start()
-        if self.allowed:
-            self.apply_users(self.allowed)
+        charon.set_section(self.name, self.connection(), self.pools())
+        if charon.running:
+            charon.reload_creds()
+            charon.reload_conns()
+        else:
+            charon.start()
+        self.apply_users(self.allowed)
 
     def stop(self) -> None:
-        self.stopping.set()
-        if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
-            try:
-                self.proc.wait(10)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-        self.proc = None
+        if not self.enabled:
+            return
+        for sa in self._sas():
+            charon.terminate(sa["uniqueid"].decode())
+        self.enabled = False
+        charon.set_secrets(SECRET_PREFIX, {})
+        charon.drop_section(self.name)
+        charon.reload_conns()
 
     def needs_restart(self, cfg: dict, dns: str) -> bool:
         return (cfg["server_id"], cfg["pool"], dns) != (self.server_id, self.pool, self.dns)
 
     def reload_certificate(self) -> None:
-        """--load-creds swaps the certificate but drops every user secret
-        loaded over VICI, so they are loaded again at once."""
         self.install_certificate()
-        subprocess.run(["swanctl", "--load-creds", "--noprompt"], capture_output=True, text=True)
-        subprocess.run(["swanctl", "--load-conns"], capture_output=True, text=True)
-        self.loaded = {}
-        self.apply_users(self.allowed)
+        charon.reload_creds()
+        charon.reload_conns()
         log.info("certificate reloaded")
 
-    # ---------------------------------------------------------- certificate
-
     def install_certificate(self) -> None:
-        """The leaf goes to x509/ and every certificate above it to x509ca/, so
-        charon sends the whole chain: a leaf alone makes iOS and Windows fail."""
         pair = acme.current(self.server_id)
-        if pair:
-            chain, key = pair
-        else:
-            chain, key = self_signed(self.server_id)
-        blocks = CERT_RE.findall(chain)
-        # charon sends the intermediates only when it can build the chain up to
-        # a root it holds. Let's Encrypt's chain may end in a cross-signed root,
-        # so the real root comes from the system store.
-        top = x509.load_pem_x509_certificate(blocks[-1])
-        if top.issuer != top.subject:
-            for candidate in Path("/etc/ssl/certs").glob("*.pem"):
-                try:
-                    root = x509.load_pem_x509_certificate(candidate.read_bytes())
-                except ValueError:
-                    continue
-                if root.subject == top.issuer:
-                    blocks.append(root.public_bytes(serialization.Encoding.PEM))
-                    break
-        for sub in ("x509", "x509ca", "private"):
-            (SWANCTL / sub).mkdir(parents=True, exist_ok=True)
-            for old in (SWANCTL / sub).glob("zr-*"):
-                old.unlink()
-        (SWANCTL / "x509" / "zr-server.pem").write_bytes(blocks[0])
-        for i, block in enumerate(blocks[1:]):
-            (SWANCTL / "x509ca" / f"zr-ca{i}.pem").write_bytes(block)
-        (SWANCTL / "private" / "zr-server.key").write_bytes(key)
-        (SWANCTL / "private" / "zr-server.key").chmod(0o600)
+        chain, key = pair if pair else self_signed(self.server_id)
+        charon.install_certificate(chain, key)
 
     def chain(self) -> bytes | None:
-        leaf = SWANCTL / "x509" / "zr-server.pem"
-        if not leaf.exists():
-            return None
-        return leaf.read_bytes() + b"".join(p.read_bytes() for p in sorted((SWANCTL / "x509ca").glob("zr-ca*.pem")))
+        return charon.chain() if self.running else None
 
-    def write_conf(self) -> None:
-        dns = ",".join(d.strip() for d in self.dns.split(",") if d.strip()) or "8.8.8.8"
-        (SWANCTL / "swanctl.conf").write_text(f"""connections {{
-  {CONN} {{
+    def connection(self) -> str:
+        return f"""  {CONN} {{
     version = 2
     unique = never
     send_cert = always
@@ -217,49 +152,48 @@ class IKEv2:
       }}
     }}
   }}
-}}
-pools {{
-  zr-pool {{
+"""
+
+    def pools(self) -> str:
+        dns = ",".join(d.strip() for d in self.dns.split(",") if d.strip()) or "8.8.8.8"
+        return f"""  zr-pool {{
     addrs = {self.pool}
     dns = {dns}
   }}
-}}
-""")
+"""
 
     # ---------------------------------------------------------------- users
 
     def apply_users(self, users: dict[str, str]) -> list[str]:
-        """Loads/unloads EAP secrets. Returns users whose password changed
-        (subscription revoked): their open sessions are hung up."""
+        """Loads EAP secrets for the allowed users. Users whose password
+        changed (subscription revoked) or who are gone are hung up."""
+        previous = self.allowed
         self.allowed = {u: pw for u, pw in users.items() if USERNAME_OK.match(u) and pw}
-        if not self.running:
+        if not self.enabled:
             return []
-        s = session()
-        added = [u for u, pw in self.allowed.items() if self.loaded.get(u) != pw]
-        removed = [u for u in self.loaded if u not in self.allowed]
-        changed = [u for u in added if u in self.loaded]
-        for name in added:
-            s.load_shared({"id": SECRET_PREFIX + name, "type": "EAP", "data": self.allowed[name], "owners": [name]})
-        for name in removed:
-            s.unload_shared({"id": SECRET_PREFIX + name})
-        self.loaded = dict(self.allowed)
-        if added or removed:
-            log.info("users: %d allowed (+%d, -%d)", len(self.allowed), len(added), len(removed))
+        charon.set_secrets(SECRET_PREFIX, {
+            SECRET_PREFIX + name: {"type": "EAP", "data": pw, "owners": [name]} for name, pw in self.allowed.items()
+        })
+        changed = [u for u, pw in self.allowed.items() if u in previous and previous[u] != pw]
+        removed = [u for u in previous if u not in self.allowed]
+        if len(previous) != len(self.allowed) or changed:
+            log.info("users: %d allowed (+%d, -%d)", len(self.allowed),
+                     len([u for u in self.allowed if u not in previous]), len(removed))
         for user in changed + removed:
             self.kick(user)
         return changed
 
+    def _sas(self) -> list[dict]:
+        return [sa for sa in charon.list_sas() if sa["conn"] == CONN and sa.get("remote-eap-id")]
+
     def kick(self, user: str) -> int:
         if not self.running:
             return 0
-        s = session()
         n = 0
-        for ike in s.list_sas():
-            for sa in ike.values():
-                if (sa.get("remote-eap-id") or b"").decode() == user:
-                    for _ in s.terminate({"ike-id": sa["uniqueid"].decode(), "force": "yes", "timeout": "-1"}):
-                        pass
-                    n += 1
+        for sa in self._sas():
+            if sa["remote-eap-id"].decode() == user:
+                charon.terminate(sa["uniqueid"].decode())
+                n += 1
         if n:
             log.info("disconnected %s (%d session(s))", user, n)
         return n
@@ -273,21 +207,18 @@ pools {{
             return []
         out = []
         now = time.time()
-        for ike in session().list_sas():
-            for sa in ike.values():
-                user = (sa.get("remote-eap-id") or b"").decode()
-                if not user:
-                    continue
-                children = []
-                for child in (sa.get("child-sas") or {}).values():
-                    children.append((child["uniqueid"].decode(), int(child.get("bytes-in", b"0")),
-                                     int(child.get("bytes-out", b"0"))))
-                out.append({
-                    "proto": "ikev2", "user": user, "id": "ike-" + sa["uniqueid"].decode(),
-                    "remote": (sa.get("remote-host") or b"").decode(),
-                    "since": int(now - int(sa.get("established", b"0") or 0)),
-                    "counters": {f"ikev2:{cid}": (up, down) for cid, up, down in children},
-                })
+        for sa in self._sas():
+            user = sa["remote-eap-id"].decode()
+            counters = {}
+            for child in (sa.get("child-sas") or {}).values():
+                counters["ikev2:" + child["uniqueid"].decode()] = (int(child.get("bytes-in", b"0")),
+                                                                   int(child.get("bytes-out", b"0")))
+            out.append({
+                "proto": "ikev2", "user": user, "id": "ike-" + sa["uniqueid"].decode(),
+                "remote": (sa.get("remote-host") or b"").decode(),
+                "since": int(now - int(sa.get("established", b"0") or 0)),
+                "counters": counters,
+            })
         return out
 
     def drain_closed(self) -> list[tuple[str, str, int, int]]:
@@ -295,27 +226,20 @@ pools {{
             out, self.closed_events = self.closed_events, []
         return out
 
-    def _listen(self) -> None:
+    def _on_event(self, label: bytes, event: dict) -> None:
         """Final counters of each CHILD_SA as it closes (child-updown without
         up=yes, or the old SA of a child-rekey), so traffic between the last
         read and the disconnect is not lost."""
-        while not self.stopping.is_set():
-            try:
-                for label, event in session().listen(["child-updown", "child-rekey"]):
-                    if label == b"child-updown" and event.get("up") == b"yes":
-                        continue
-                    with self.lock:
-                        for _, sa in event.items():
-                            if not isinstance(sa, dict):
-                                continue
-                            user = (sa.get("remote-eap-id") or b"").decode()
-                            for child in (sa.get("child-sas") or {}).values():
-                                child = child.get("old", child)
-                                if user:
-                                    self.closed_events.append((user, "ikev2:" + child["uniqueid"].decode(),
-                                                               int(child.get("bytes-in", b"0")),
-                                                               int(child.get("bytes-out", b"0"))))
-            except Exception as exc:
-                if not self.stopping.is_set():
-                    log.warning("event listener: %s; reconnecting", exc)
-                    time.sleep(2)
+        if label == b"child-updown" and event.get("up") == b"yes":
+            return
+        with self.lock:
+            for name, sa in event.items():
+                if not isinstance(sa, dict) or text(name) != CONN:
+                    continue
+                user = (sa.get("remote-eap-id") or b"").decode()
+                for child in (sa.get("child-sas") or {}).values():
+                    child = child.get("old", child)
+                    if user:
+                        self.closed_events.append((user, "ikev2:" + child["uniqueid"].decode(),
+                                                   int(child.get("bytes-in", b"0")),
+                                                   int(child.get("bytes-out", b"0"))))

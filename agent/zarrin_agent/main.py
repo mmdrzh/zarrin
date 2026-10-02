@@ -1,7 +1,7 @@
 """Zarrin node agent.
 
-Runs the VPN services (IKEv2 today; L2TP, OpenVPN and WireGuard plug in the
-same way) in the host's network namespace, beside PasarGuard's node and never
+Runs the VPN services (IKEv2 and L2TP/IPsec; OpenVPN plugs in the same way)
+in the host's network namespace, beside PasarGuard's node and never
 touching it. It keeps the allowed users in step with the panel (a new user can
 connect within seconds), hangs up anyone no longer allowed, and reports who is
 online and how much traffic each user moved.
@@ -18,11 +18,13 @@ from pathlib import Path
 import requests
 
 from . import acme, firewall
+from .charon import charon
 from .ikev2 import IKEv2
+from .l2tp import L2TP
 from .panel import panel
 from .usage import Usage
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 log = logging.getLogger("zarrin.agent")
@@ -38,7 +40,8 @@ class Agent:
     def __init__(self) -> None:
         self.stop = threading.Event()
         self.ikev2 = IKEv2()
-        self.services = [self.ikev2]
+        self.l2tp = L2TP()
+        self.services = [self.ikev2, self.l2tp]
         self.usage = Usage()
         self.cfg: dict = {}
         self.users: dict[str, str] = {}
@@ -49,27 +52,40 @@ class Agent:
     # -------------------------------------------------------------- config
 
     def apply_config(self, cfg: dict) -> None:
+        """Turns each service on, off or restarts it to match the panel."""
         dns = cfg.get("dns", "8.8.8.8,1.1.1.1")
-        ik = cfg["ikev2"]
-        pools = [ik["pool"]] if ik["enabled"] else []
-        firewall.ensure(pools)
-        if ik["enabled"]:
-            if not self.ikev2.running:
-                self.ensure_certificate(ik["server_id"], cfg.get("acme_email", ""))
-                self.ikev2.start(ik, dns)
-                self.cert_reported = False
-            elif self.ikev2.needs_restart(ik, dns):
-                log.info("IKEv2 settings changed; restarting")
+        wanted = {svc.name: (cfg.get(svc.name) or {}) for svc in self.services}
+        pools = [w["pool"] for w in wanted.values() if w.get("enabled")]
+        firewall.ensure(pools, l2tp=bool(wanted["l2tp"].get("enabled")))
+        for svc in self.services:
+            want = wanted[svc.name]
+            if want.get("enabled"):
+                if not svc.running:
+                    if svc.enabled:
+                        log.error("%s is not running; restarting", svc.name)
+                        self.collect()
+                        svc.stop()
+                    self.start_service(svc, want, dns, cfg)
+                elif svc.needs_restart(want, dns):
+                    log.info("%s settings changed; restarting", svc.name)
+                    self.collect()
+                    svc.stop()
+                    self.start_service(svc, want, dns, cfg)
+            elif svc.enabled:
+                log.info("%s turned off in the panel", svc.name)
                 self.collect()
-                self.ikev2.stop()
-                self.ensure_certificate(ik["server_id"], cfg.get("acme_email", ""))
-                self.ikev2.start(ik, dns)
-                self.cert_reported = False
-        elif self.ikev2.running:
-            log.info("IKEv2 turned off in the panel")
-            self.collect()
-            self.ikev2.stop()
+                svc.stop()
+        if not any(svc.enabled for svc in self.services) and charon.running:
+            charon.stop()
         self.cfg = cfg
+
+    def start_service(self, svc, want: dict, dns: str, cfg: dict) -> None:
+        if svc is self.ikev2:
+            self.ensure_certificate(want["server_id"], cfg.get("acme_email", ""))
+            self.cert_reported = False
+        svc.start(want, dns)
+        if self.users_synced:
+            svc.apply_users(self.users)
 
     def ensure_certificate(self, server_id: str, email: str) -> bool:
         if acme.is_ip(server_id) and not os.environ.get("ACME_IP"):
@@ -175,11 +191,8 @@ class Agent:
                     if self.ikev2.running and self.ensure_certificate(ik["server_id"], self.cfg.get("acme_email", "")):
                         self.ikev2.reload_certificate()
                         self.report_chain()
-                for svc in self.services:
-                    if svc.proc is not None and not svc.running:
-                        log.error("%s exited; restarting", svc.name)
-                        svc.proc = None
-                        next_cfg = 0
+                if any(svc.enabled and not svc.running for svc in self.services):
+                    next_cfg = 0  # apply_config restarts it
             except (requests.RequestException, ValueError) as exc:
                 log.warning("panel: %s", exc)
             except Exception:
@@ -201,6 +214,7 @@ class Agent:
             self.usage.save()
         for svc in self.services:
             svc.stop()
+        charon.stop()
         firewall.remove()
 
 
