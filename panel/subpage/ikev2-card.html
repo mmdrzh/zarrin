@@ -92,7 +92,7 @@ ol.steps .c{color:var(--acc)}
         <span class="live"><i></i>فعال</span>
       </div>
       <div class="kv">
-        <div class="r"><span class="k">سرور</span><span class="v mono">ik.gilangard.ir</span><button class="copy" type="button" data-copy="ik.gilangard.ir">کپی</button></div>
+        <div class="r"><span class="k">سرور</span><span class="v mono">__VPN_SERVER__</span><button class="copy" type="button" data-copy="__VPN_SERVER__">کپی</button></div>
         <div class="r"><span class="k">نام کاربری</span><span class="v mono">{{ user.username }}</span><button class="copy" type="button" data-copy="{{ user.username }}">کپی</button></div>
         <div class="r"><span class="k">رمز</span><span class="v mono">{{ pgik.pw }}</span><button class="copy" type="button" data-copy="{{ pgik.pw }}">کپی</button></div>
       </div>
@@ -117,13 +117,28 @@ ol.steps .c{color:var(--acc)}
     <ol class="steps" id="steps"></ol>
   </details>
 
+  <details class="guide" id="l2tp"><summary>L2TP/IPsec · ویندوز، آیفون و مک</summary>
+    <div class="kv" style="margin-bottom:10px">
+      <div class="r"><span class="k">سرور</span><span class="v mono">__VPN_SERVER__</span><button class="copy" type="button" data-copy="__VPN_SERVER__">کپی</button></div>
+      <div class="r"><span class="k">کلید (PSK)</span><span class="v mono">__L2TP_PSK__</span><button class="copy" type="button" data-copy="__L2TP_PSK__">کپی</button></div>
+      <div class="r"><span class="k">نام کاربری</span><span class="v mono">{{ user.username }}</span><button class="copy" type="button" data-copy="{{ user.username }}">کپی</button></div>
+      <div class="r"><span class="k">رمز</span><span class="v mono">{{ pgik.pw }}</span><button class="copy" type="button" data-copy="{{ pgik.pw }}">کپی</button></div>
+    </div>
+    <div class="seg" role="tablist">
+      <button type="button" role="tab" data-l2="win" aria-selected="true">ویندوز</button>
+      <button type="button" role="tab" data-l2="ios" aria-selected="false">آیفون</button>
+      <button type="button" role="tab" data-l2="mac" aria-selected="false">مک</button>
+    </div>
+    <ol class="steps" id="l2steps"></ol>
+  </details>
+
   <p class="foot">رمز مخصوص اکانت خودته؛ به کسی نده.</p>
   </div>
 
 </section>
 {% raw %}<script>
 (function(){
-  var d = document, root = d.getElementById("pgik"), SERVER = "ik.gilangard.ir", USER = root.dataset.u, PASS = root.dataset.p;
+  var d = document, root = d.getElementById("pgik"), SERVER = "__VPN_SERVER__", USER = root.dataset.u, PASS = root.dataset.p;
   var guides = {
     ios: ['<span class="p">Settings › General › VPN › Add VPN Configuration</span>', 'Type: <span class="c">IKEv2</span>', 'Server و Remote ID: <span class="c">' + SERVER + '</span>', 'User Authentication: <span class="c">Username</span>، نام کاربری و رمز'],
     android: ['<span class="p">Settings › Network › VPN</span> ← افزودن', 'Type: <span class="c">IKEv2/IPSec MSCHAPv2</span>', 'Server و IPSec identifier: <span class="c">' + SERVER + '</span>', 'CA certificate: <span class="c">System</span>، بعد نام کاربری و رمز'],
@@ -134,9 +149,31 @@ ol.steps .c{color:var(--acc)}
   root.querySelectorAll(".seg [data-os]").forEach(function(b){ b.onclick = function(){ show(b.dataset.os); }; });
   show(/Android/.test(navigator.userAgent) ? "android" : /Windows/.test(navigator.userAgent) ? "win" : "ios");
 
-  root.querySelectorAll(".copy").forEach(function(b){ b.onclick = function(){ var o = b.textContent;
+  // L2TP/IPsec: same username and password, plus the shared key.
+  var PSK = "__L2TP_PSK__", REG = "reg add HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent /v AssumeUDPEncapsulationContextOnSendRule /t REG_DWORD /d 2 /f";
+  var l2 = {
+    win: ['<span class="p">Settings › Network & internet › VPN › Add VPN</span>',
+          'Server name: <span class="c">' + SERVER + '</span>، VPN type: <span class="c">L2TP/IPsec with pre-shared key</span>',
+          'Pre-shared key: <span class="c">' + PSK + '</span>',
+          'Sign-in info: <span class="c">User name and password</span> با نام کاربری و رمز بالا',
+          'اگر وصل نشد (خطای 809): این دستور را در CMD با Run as administrator بزنید و ویندوز را ری‌استارت کنید:<br><span class="c" style="font-size:11px">' + REG + '</span> <button class="copy" type="button" data-copy="' + REG + '">کپی</button>'],
+    ios: ['<span class="p">Settings › General › VPN › Add VPN Configuration</span>',
+          'Type: <span class="c">L2TP</span>', 'Server: <span class="c">' + SERVER + '</span>',
+          'Account و Password: نام کاربری و رمز بالا', 'Secret: <span class="c">' + PSK + '</span>', 'Send All Traffic: روشن'],
+    mac: ['<span class="p">System Settings › VPN › Add VPN Configuration › L2TP over IPSec</span>',
+          'Server address: <span class="c">' + SERVER + '</span>', 'Account name و Password: نام کاربری و رمز بالا',
+          'Shared secret: <span class="c">' + PSK + '</span>', 'Options › Send all traffic over VPN: روشن']
+  };
+  function show2(k){ root.querySelectorAll(".seg [data-l2]").forEach(function(b){ b.setAttribute("aria-selected", b.dataset.l2 === k); });
+    d.getElementById("l2steps").innerHTML = l2[k].map(function(s){ return "<li>" + s + "</li>"; }).join("");
+    bindCopy(d.getElementById("l2steps")); }
+  root.querySelectorAll(".seg [data-l2]").forEach(function(b){ b.onclick = function(){ show2(b.dataset.l2); }; });
+
+  function bindCopy(scope){ scope.querySelectorAll(".copy").forEach(function(b){ b.onclick = function(){ var o = b.textContent;
     var ok = function(){ b.textContent = "کپی شد"; b.classList.add("done"); setTimeout(function(){ b.textContent = o; b.classList.remove("done"); }, 1200); };
-    try { navigator.clipboard.writeText(b.dataset.copy).then(ok, function(){}); } catch (e) {} }; });
+    try { navigator.clipboard.writeText(b.dataset.copy).then(ok, function(){}); } catch (e) {} }; }); }
+  bindCopy(root);
+  show2(/Mac OS X/.test(navigator.userAgent) && !/iPhone|iPad/.test(navigator.userAgent) ? "mac" : /iPhone|iPad/.test(navigator.userAgent) ? "ios" : "win");
 
   // iPhone profile, the same IKEv2 settings as Tifusi's own profile.
   function uid(){ return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c){ var r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }).toUpperCase(); }

@@ -12,6 +12,12 @@
         <label class="field"><span>کلید مشترک L2TP (Pre-shared key)</span>
           <input v-model="s.l2tp_psk" class="ltr mono" autocomplete="off" />
           <div class="hint">برای همه‌ی کاربران و نودها یکی است. با عوض کردنش، همه‌ی کاربران L2TP باید کلید را در دستگاهشان عوض کنند.</div></label>
+        <div class="row">
+          <button class="btn" @click="applySubpage">به‌روزرسانی کارت صفحه‌ی ساب</button>
+          <span v-if="subpage" class="small" :style="{ color: subpage.ok ? 'var(--ok)' : subpage.ok === false ? 'var(--bad)' : 'var(--muted)' }">
+            {{ subpage.pending ? 'در حال اعمال...' : subpage.ok ? 'اعمال شد ' + ago(subpage.at) : subpage.ok === false ? subpage.message : '' }}</span>
+        </div>
+        <div class="hint">کارت IKEv2 و L2TP (سرور، کلید، یوزر، رمز و راهنما) در صفحه‌ی ساب پاسارگاد. با تغییر دامنه یا کلید خودکار به‌روز می‌شود.</div>
       </div>
 
       <div class="card">
@@ -72,7 +78,7 @@
 
 <script setup>
 import { ref, computed, onMounted, inject } from 'vue'
-import { api, num } from '../api'
+import { api, num, ago } from '../api'
 
 const toast = inject('toast')
 const s = ref(null)
@@ -83,12 +89,13 @@ const cfNew = ref({ label: '', token: '' })
 const cfBusy = ref(false)
 const cfError = ref('')
 const pgTest = ref(null)
+const subpage = ref(null)
 
 async function load() {
   s.value = await api.get('/api/settings')
   cfTokens.value = await api.get('/api/cloudflare/tokens')
 }
-onMounted(load)
+onMounted(() => { load(); loadSubpage() })
 
 const ikevNoToken = computed(() => {
   const d = (s.value?.ikev2_domain || '').toLowerCase()
@@ -124,6 +131,11 @@ async function save() {
 }
 async function testTelegram() {
   try { await save(); await api.post('/api/settings/telegram/test'); toast('پیام ارسال شد ✅') } catch (e) { alert(e.message) }
+}
+async function loadSubpage() { subpage.value = await api.get('/api/subpage/status').catch(() => null) }
+async function applySubpage() {
+  await api.post('/api/subpage/apply'); await loadSubpage()
+  const t = setInterval(async () => { await loadSubpage(); if (!subpage.value?.pending) clearInterval(t) }, 2000)
 }
 async function testPg() {
   pgTest.value = null

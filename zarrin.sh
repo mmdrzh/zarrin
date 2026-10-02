@@ -8,6 +8,7 @@
 #   zarrin admin <user>      create an admin or reset its password (turns 2FA off)
 #   zarrin subpage [--remove]  add/remove the IKEv2 card in PasarGuard's subscription page
 #   zarrin restore-run       run a restore requested from the panel (used by systemd)
+#   zarrin subpage-run       refresh the subscription page card for the panel (used by systemd)
 set -euo pipefail
 
 DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -58,8 +59,37 @@ Description=Zarrin: restore a backup requested from the panel
 Type=oneshot
 ExecStart=$DIR/zarrin.sh restore-run
 UNIT
+  cat > /etc/systemd/system/zarrin-subpage.path <<UNIT
+[Unit]
+Description=Zarrin: watch for subscription page refresh requests from the panel
+
+[Path]
+PathExists=$DIR/data/subpage/request
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  cat > /etc/systemd/system/zarrin-subpage.service <<UNIT
+[Unit]
+Description=Zarrin: refresh the IKEv2/L2TP card in PasarGuard's subscription page
+
+[Service]
+Type=oneshot
+ExecStart=$DIR/zarrin.sh subpage-run
+UNIT
   systemctl daemon-reload
-  systemctl enable --now zarrin-restore.path >/dev/null 2>&1
+  systemctl enable --now zarrin-restore.path zarrin-subpage.path >/dev/null 2>&1
+}
+
+cmd_subpage_run() {
+  local d="$DIR/data/subpage"
+  [ -f "$d/request" ] || exit 0
+  rm -f "$d/request"
+  if out=$("$DIR/panel/subpage/install.sh" 2>&1); then
+    printf '{"ok": true, "at": %s, "message": %s}\n' "$(date +%s)" "$(printf '%s' "$out" | tail -1 | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" > "$d/status.json"
+  else
+    printf '{"ok": false, "at": %s, "message": %s}\n' "$(date +%s)" "$(printf '%s' "$out" | tail -3 | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" > "$d/status.json"
+  fi
 }
 
 # ------------------------------------------------------------------ restore
@@ -267,6 +297,7 @@ case "${1:-status}" in
   admin) shift; cmd_admin "$@" ;;
   subpage) shift; cmd_subpage "$@" ;;
   restore-run) cmd_restore_run ;;
+  subpage-run) cmd_subpage_run ;;
   install-units) install_units ;;
   *) sed -n '2,11p' "$0"; exit 1 ;;
 esac

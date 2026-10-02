@@ -351,10 +351,41 @@ async def put_settings(body: dict, request: Request, admin=Admin):
                 raise HTTPException(400, "کلید L2TP باید ۸ تا ۶۴ کاراکتر انگلیسی بدون فاصله باشد")
         else:
             value = str(value or "").strip()[:4096]
+        if await store.get(key) == value:
+            continue
         await store.set(key, value)
         changed.append(key)
     await store.audit(admin["username"], client_ip(request), "settings.update", ",".join(changed))
+    if {"ikev2_domain", "l2tp_psk"} & set(changed):
+        request_subpage_refresh()
     return {"ok": True, "changed": changed}
+
+
+SUBPAGE_DIR = config.DATA / "subpage"
+
+
+def request_subpage_refresh() -> None:
+    """Asks the host (zarrin-subpage.path) to re-apply the card, which bakes in
+    the VPN domain and the L2TP key."""
+    SUBPAGE_DIR.mkdir(parents=True, exist_ok=True)
+    (SUBPAGE_DIR / "request").write_text(str(int(time.time())))
+
+
+@router.post("/subpage/apply")
+async def subpage_apply(request: Request, admin=Admin):
+    request_subpage_refresh()
+    await store.audit(admin["username"], client_ip(request), "subpage.apply")
+    return {"ok": True}
+
+
+@router.get("/subpage/status")
+async def subpage_status(admin=Admin):
+    f = SUBPAGE_DIR / "status.json"
+    pending = (SUBPAGE_DIR / "request").exists()
+    try:
+        return {**json.loads(f.read_text()), "pending": pending}
+    except (OSError, ValueError):
+        return {"ok": None, "pending": pending}
 
 
 @router.post("/settings/telegram/test")

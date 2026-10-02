@@ -5,15 +5,22 @@ set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
 MODE=add; [ "$1" = "--remove" ] && { MODE=remove; shift; }
 T=${1:-/var/lib/pasarguard/templates/subscription/index.html}
+# The shared VPN domain and the L2TP key come from Zarrin's settings.
+SERVER=$(docker exec zarrin python -m zarrin.cli get ikev2_domain 2>/dev/null || true)
+PSK=$(docker exec zarrin python -m zarrin.cli get l2tp_psk 2>/dev/null || true)
+if [ "$MODE" = add ] && { [ -z "$SERVER" ] || [ -z "$PSK" ]; }; then
+  echo "Zarrin is not running or the VPN domain / L2TP key is not set"; exit 1
+fi
 cp "$T" "$T.bak-ikev2-$(date +%Y%m%d-%H%M%S)"
-python3 - "$T" "$DIR/ikev2-card.html" "$MODE" "$DIR/ikev2-head.html" <<'PY'
+python3 - "$T" "$DIR/ikev2-card.html" "$MODE" "$DIR/ikev2-head.html" "$SERVER" "$PSK" <<'PY'
 import re, sys
-path, card, mode, head = sys.argv[1:5]
+path, card, mode, head, server, psk = sys.argv[1:7]
+fill = lambda text: text.replace("__VPN_SERVER__", server).replace("__L2TP_PSK__", psk)
 s = open(path, encoding="utf-8").read()
 s = re.sub(r"<!-- pg-ikev2 start.*?<!-- pg-ikev2 end -->\n?", "", s, flags=re.S)
 s = re.sub(r"<!-- pg-ikev2-head start.*?<!-- pg-ikev2-head end -->\n?", "", s, flags=re.S)
 if mode == "add":
-    snippet = open(card, encoding="utf-8").read()
+    snippet = fill(open(card, encoding="utf-8").read())
     # Above the page's own app, so it is the first thing a customer sees.
     i = s.find('<div id="root">')
     if i < 0:
@@ -22,7 +29,7 @@ if mode == "add":
     # The app's IKEv2 login right after <head>, so it is found in the first few KB.
     h = re.search(r"<head[^>]*>", s, re.I)
     if h:
-        s = s[:h.end()] + "\n" + open(head, encoding="utf-8").read() + s[h.end():]
+        s = s[:h.end()] + "\n" + fill(open(head, encoding="utf-8").read()) + s[h.end():]
 open(path, "w", encoding="utf-8").write(s)
 PY
 # Render the new template for a real user before keeping it: a broken

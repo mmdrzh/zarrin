@@ -4,6 +4,7 @@
   python -m zarrin.cli grant                  create/refresh the least-privilege PostgreSQL role
   python -m zarrin.cli import-legacy <env>    take over nodes from an old pg-ikev2 bridge .env
   python -m zarrin.cli set <key> <json value> change a setting
+  python -m zarrin.cli get <key>              print a setting
 """
 
 import asyncio
@@ -94,6 +95,13 @@ async def cmd_set(key: str, value: str) -> None:
     print(f"{key} updated")
 
 
+async def cmd_get(key: str) -> None:
+    await store.open()
+    value = await store.get(key)
+    await store.close()
+    print(value if isinstance(value, str) else json.dumps(value))
+
+
 def main() -> None:
     args = sys.argv[1:]
     if len(args) == 2 and args[0] == "admin":
@@ -102,6 +110,8 @@ def main() -> None:
         asyncio.run(cmd_grant())
     elif len(args) == 2 and args[0] == "import-legacy":
         asyncio.run(cmd_import_legacy(args[1]))
+    elif len(args) == 2 and args[0] == "get":
+        asyncio.run(cmd_get(args[1]))
     elif len(args) == 3 and args[0] == "set":
         asyncio.run(cmd_set(args[1], args[2]))
     else:
