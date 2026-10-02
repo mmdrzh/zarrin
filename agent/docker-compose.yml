@@ -1,0 +1,17 @@
+# Zarrin node agent. A compose project of its own, beside (never inside)
+# /opt/pg-node, so PasarGuard node updates do not touch it.
+services:
+  agent:
+    build: .
+    image: zarrin-agent:local
+    container_name: zarrin-agent
+    restart: unless-stopped
+    # Host network: charon answers on the node's own UDP 500/4500.
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW]
+    env_file: .env
+    stop_grace_period: 30s
+    volumes:
+      - ./data:/data
+    logging:
+      options: {max-size: "20m", max-file: "3"}

@@ -1,0 +1,159 @@
+<!-- pg-ikev2 start: IKEv2 card and page theme, added by /opt/pg-ikev2-bridge/subpage/install.sh -->
+{%- set pgik_h = (user.proxy_settings.vless.id | string) | replace('-', '') | lower -%}
+{%- set pgik = namespace(pw='') -%}
+{%- for i in range(6) -%}{%- set pgik.pw = pgik.pw ~ ((pgik_h[i*5:i*5+5] | int(0, 16)) % 10) -%}{%- endfor -%}
+{% raw %}<style>
+/* Whole subscription page in Tifusi's black and orange (the page's own shadcn tokens). */
+html:root,html.dark,html[data-theme]{--background:#0a0a0a;--foreground:#e5e5e5;--card:#141414;--card-foreground:#f5f5f5;--popover:#141414;--popover-foreground:#f5f5f5;
+  --primary:#f97316;--primary-light:#f97316;--primary-dark:#f97316;--primary-foreground:#1a0d02;--secondary:#1c1c1c;--secondary-foreground:#f5f5f5;
+  --muted:#1c1c1c;--muted-foreground:#8b8b8b;--accent:#1f1f1f;--accent-foreground:#f5f5f5;--border:#232323;--input:#2a2a2a;--ring:#f97316;
+  --chart-1:#f97316;--chart-2:#fb923c;--chart-3:#fdba74;--chart-4:#ea580c;--chart-5:#9a3412;
+  --sidebar:#141414;--sidebar-foreground:#e5e5e5;--sidebar-primary:#f97316;--sidebar-primary-foreground:#1a0d02;--sidebar-accent:#1f1f1f;--sidebar-accent-foreground:#f5f5f5;--sidebar-border:#232323;--sidebar-ring:#f97316;color-scheme:dark}
+html,body{background:radial-gradient(520px 260px at 50% -60px,rgb(249 115 22 / .14),transparent 70%) no-repeat,#0a0a0a!important}
+
+/* Tifusi Panel's own dark look, single-theme on purpose. */
+#pgik{--bg:#0a0a0a;--card:#141414;--card2:#101010;--line:#232323;--ink:#f5f5f5;--txt:#e5e5e5;--muted:#8b8b8b;--acc:#f97316;--acc2:#fb923c;--ok:#22c55e;font-family:Vazirmatn,Tahoma,system-ui,sans-serif;direction:rtl;text-align:right;line-height:1.6;color:var(--txt);padding-inline:16px;padding-block:18px 6px}
+#pgik .wrap{max-width:560px;margin-inline:auto;display:flex;flex-direction:column;gap:14px}
+#pgik button,#pgik a{font:inherit;color:inherit}
+#pgik button:focus-visible,#pgik a:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+#pgik .mono{font-family:ui-monospace,"SFMono-Regular",Menlo,monospace;direction:ltr;unicode-bidi:isolate}
+
+/* glowing ring card */
+#pgik .ring{position:relative;border-radius:20px;padding:1px;overflow:hidden;isolation:isolate}
+#pgik .ring::before{content:"";position:absolute;inset:-60%;z-index:-1;background:conic-gradient(from 0deg,transparent 0 62%,var(--acc) 72%,#fed7aa 76%,var(--acc) 80%,transparent 90%)}
+@media (prefers-reduced-motion:no-preference){.ring::before{animation:spin 6s linear infinite}}
+@keyframes spin{to{transform:rotate(1turn)}}
+#pgik .ring::after{content:"";position:absolute;inset:0;z-index:-2;background:var(--line);border-radius:20px}
+#pgik .main{background:linear-gradient(180deg,#171717,var(--card2));border-radius:19px;padding:16px;display:flex;flex-direction:column;gap:14px}
+
+#pgik .head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#pgik .head .t{display:flex;align-items:center;gap:10px}
+#pgik .head .ic{width:42px;height:42px;border-radius:12px;overflow:hidden;flex:none;box-shadow:0 6px 18px -6px rgb(249 115 22 / .7)}
+#pgik .head .ic img{width:100%;height:100%;display:block}
+#pgik .head b{display:block;font-size:16px;color:var(--ink)}
+#pgik .head small{display:block;font-size:12px;color:var(--muted)}
+#pgik .live{display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 11px;border-radius:99px;border:1px solid rgb(249 115 22 / .35);color:var(--acc);background:rgb(249 115 22 / .08);white-space:nowrap}
+#pgik .live i{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+@media (prefers-reduced-motion:no-preference){.live i{animation:blink 1.6s ease-in-out infinite}}
+@keyframes blink{50%{opacity:.3}}
+
+#pgik .pwbox{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#0d0d0d;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+#pgik .pwbox .l{font-size:12px;color:var(--muted)}
+#pgik .digits{display:flex;gap:6px;direction:ltr}
+#pgik .digits span{width:34px;height:44px;border-radius:9px;display:grid;place-items:center;font:700 22px ui-monospace,Menlo,monospace;color:var(--ink);
+  background:linear-gradient(180deg,#1f1f1f,#161616);border:1px solid #2a2a2a;box-shadow:inset 0 -2px 0 rgb(249 115 22 / .55)}
+@media (max-width:380px){.digits span{width:28px;height:38px;font-size:18px}}
+#pgik .kv{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+#pgik .kv .r{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card)}
+#pgik .kv .r+.r{border-top:1px dashed var(--line)}
+#pgik .kv .k{font-size:12.5px;color:var(--muted);width:70px;flex:none}
+#pgik .kv .v{flex:1;min-width:0;font-size:14px;color:var(--ink);overflow-wrap:anywhere;text-align:left}
+#pgik .copy{background:#1c1c1c;color:var(--ink);border:1px solid #2d2d2d;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:none}
+#pgik .copy.done{background:#15221a;border-color:var(--ok);color:var(--ok)}
+
+#pgik .sec-t{font-size:13px;color:#bebebe;font-weight:500;margin:2px 2px -4px}
+#pgik .tiles{display:flex;flex-direction:column;gap:8px}
+#pgik .tile{display:flex;align-items:center;gap:12px;padding:12px 14px;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:14px;
+  transition:border-color .2s,transform .2s,background .2s}
+#pgik .tile:hover{border-color:rgb(249 115 22 / .45);transform:translateY(-1px)}
+#pgik .tile:active{background:#1c1c1c}
+#pgik .tile-ic{width:44px;height:44px;border-radius:11px;flex:none;display:grid;place-items:center;overflow:hidden}
+#pgik .tile-ic img{width:44px;height:44px;display:block}
+#pgik .tile-ic.apple{background:var(--ink);color:#0a0a0a}
+#pgik .tile-ic.imp{background:rgb(249 115 22 / .12);color:var(--acc);font-weight:800;font-size:20px}
+#pgik .tile-t{display:flex;flex-direction:column;flex:1;min-width:0}
+#pgik .tile-t b{font-size:14px;color:var(--ink);font-weight:600}
+#pgik .tile-t small{font-size:12px;color:var(--muted)}
+#pgik .go{font-size:12px;font-weight:700;color:#1a0d02;background:linear-gradient(135deg,var(--acc2),var(--acc));border-radius:9px;padding:6px 14px;flex:none;box-shadow:0 4px 14px -6px var(--acc)}
+
+details.guide{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
+details.guide summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:13.5px;color:var(--ink);font-weight:600}
+details.guide summary::after{content:"+";color:var(--acc);font-size:18px}
+details.guide[open] summary::after{content:"–"}
+#pgik .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:#0d0d0d;border:1px solid var(--line);border-radius:11px;padding:3px;margin-bottom:10px}
+#pgik .seg button{border:0;background:transparent;border-radius:8px;padding:7px 4px;font-size:13px;color:var(--muted);cursor:pointer}
+#pgik .seg button[aria-selected="true"]{background:#1f1f1f;color:var(--ink);box-shadow:inset 0 -2px 0 var(--acc)}
+ol.steps{margin:0 0 12px;padding-inline-start:20px;font-size:13.5px;line-height:1.9}
+ol.steps .p,ol.steps .c{direction:ltr;unicode-bidi:isolate;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+ol.steps .c{color:var(--acc)}
+#pgik .qrw{display:flex;flex-direction:column;align-items:center;gap:6px}
+#pgik .qrbox{background:#fff;padding:10px;border-radius:12px;line-height:0}
+#pgik .qrbox svg{width:168px;height:168px;display:block}
+#pgik .qrw small{font-size:12px;color:var(--muted)}
+#pgik .foot{font-size:11.5px;color:#6b6b6b;text-align:center}
+
+</style>{% endraw %}
+<section id="pgik" data-u="{{ user.username }}" data-p="{{ pgik.pw }}">
+<div class="wrap">
+  <div class="ring">
+    <div class="main">
+      <div class="head">
+        <div class="t"><div><b>اتصال IKEv2</b><small>بدون برنامه · پایدار روی همراه اول</small></div></div>
+        <span class="live"><i></i>فعال</span>
+      </div>
+      <div class="kv">
+        <div class="r"><span class="k">سرور</span><span class="v mono">ik.gilangard.ir</span><button class="copy" type="button" data-copy="ik.gilangard.ir">کپی</button></div>
+        <div class="r"><span class="k">نام کاربری</span><span class="v mono">{{ user.username }}</span><button class="copy" type="button" data-copy="{{ user.username }}">کپی</button></div>
+        <div class="r"><span class="k">رمز</span><span class="v mono">{{ pgik.pw }}</span><button class="copy" type="button" data-copy="{{ pgik.pw }}">کپی</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-t">نصب سریع</div>
+  <div class="tiles">
+    <a class="tile" id="iosTile" href="#">
+      <span class="tile-ic apple"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg></span>
+      <span class="tile-t"><b>آیفون، آیپد و مک</b><small>نصب پروفایل IKEv2 با یک لمس</small></span>
+      <span class="go">نصب</span>
+    </a>
+  </div>
+
+  <details class="guide"><summary>تنظیم دستی</summary>
+    <div class="seg" role="tablist">
+      <button type="button" role="tab" data-os="ios" aria-selected="true" id="s-ios">آیفون</button>
+      <button type="button" role="tab" data-os="android" aria-selected="false" id="s-and">اندروید</button>
+      <button type="button" role="tab" data-os="win" aria-selected="false" id="s-win">ویندوز</button>
+    </div>
+    <ol class="steps" id="steps"></ol>
+  </details>
+
+  <p class="foot">رمز مخصوص اکانت خودته؛ به کسی نده.</p>
+  </div>
+
+</section>
+{% raw %}<script>
+(function(){
+  var d = document, root = d.getElementById("pgik"), SERVER = "ik.gilangard.ir", USER = root.dataset.u, PASS = root.dataset.p;
+  var guides = {
+    ios: ['<span class="p">Settings › General › VPN › Add VPN Configuration</span>', 'Type: <span class="c">IKEv2</span>', 'Server و Remote ID: <span class="c">' + SERVER + '</span>', 'User Authentication: <span class="c">Username</span>، نام کاربری و رمز'],
+    android: ['<span class="p">Settings › Network › VPN</span> ← افزودن', 'Type: <span class="c">IKEv2/IPSec MSCHAPv2</span>', 'Server و IPSec identifier: <span class="c">' + SERVER + '</span>', 'CA certificate: <span class="c">System</span>، بعد نام کاربری و رمز'],
+    win: ['<span class="p">Settings › Network & internet › VPN › Add VPN</span>', 'Server name: <span class="c">' + SERVER + '</span>، VPN type: <span class="c">IKEv2</span>', 'Sign-in info: <span class="c">User name and password</span>', 'نام کاربری و رمز، Save و Connect']
+  };
+  function show(k){ root.querySelectorAll(".seg [data-os]").forEach(function(b){ b.setAttribute("aria-selected", b.dataset.os === k); });
+    d.getElementById("steps").innerHTML = guides[k].map(function(s){ return "<li>" + s + "</li>"; }).join(""); }
+  root.querySelectorAll(".seg [data-os]").forEach(function(b){ b.onclick = function(){ show(b.dataset.os); }; });
+  show(/Android/.test(navigator.userAgent) ? "android" : /Windows/.test(navigator.userAgent) ? "win" : "ios");
+
+  root.querySelectorAll(".copy").forEach(function(b){ b.onclick = function(){ var o = b.textContent;
+    var ok = function(){ b.textContent = "کپی شد"; b.classList.add("done"); setTimeout(function(){ b.textContent = o; b.classList.remove("done"); }, 1200); };
+    try { navigator.clipboard.writeText(b.dataset.copy).then(ok, function(){}); } catch (e) {} }; });
+
+  // iPhone profile, the same IKEv2 settings as Tifusi's own profile.
+  function uid(){ return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c){ var r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }).toUpperCase(); }
+  function esc(v){ return String(v).replace(/[<>&]/g, function(c){ return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]; }); }
+  function sa(life){ return "<dict><key>EncryptionAlgorithm</key><string>AES-256</string><key>IntegrityAlgorithm</key><string>SHA2-256</string><key>DiffieHellmanGroup</key><integer>14</integer><key>LifeTimeInMinutes</key><integer>" + life + "</integer></dict>"; }
+  var xml = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>' +
+    "<key>PayloadContent</key><array><dict><key>IKEv2</key><dict>" +
+    "<key>AuthenticationMethod</key><string>None</string><key>ExtendedAuthEnabled</key><true/><key>AuthName</key><string>" + esc(USER) + "</string><key>AuthPassword</key><string>" + esc(PASS) + "</string><key>LocalIdentifier</key><string>" + esc(USER) + "</string>" +
+    "<key>RemoteAddress</key><string>" + SERVER + "</string><key>RemoteIdentifier</key><string>" + SERVER + "</string><key>DeadPeerDetectionRate</key><string>Medium</string><key>EnablePFS</key><true/>" +
+    "<key>EnableCertificateRevocationCheck</key><integer>0</integer><key>UseConfigurationAttributeInternalIPSubnet</key><integer>0</integer>" +
+    "<key>IKESecurityAssociationParameters</key>" + sa(1440) + "<key>ChildSecurityAssociationParameters</key>" + sa(60) + "</dict>" +
+    "<key>PayloadDisplayName</key><string>IKEv2 VPN</string><key>PayloadIdentifier</key><string>vpn.ikev2.ikev2." + esc(USER) + "</string><key>PayloadType</key><string>com.apple.vpn.managed</string><key>PayloadUUID</key><string>" + uid() + "</string><key>PayloadVersion</key><integer>1</integer>" +
+    "<key>UserDefinedName</key><string>IKEv2 VPN</string><key>VPNType</key><string>IKEv2</string></dict></array>" +
+    "<key>PayloadDisplayName</key><string>IKEv2 VPN</string><key>PayloadIdentifier</key><string>vpn.ikev2.profile." + esc(USER) + "</string><key>PayloadType</key><string>Configuration</string><key>PayloadUUID</key><string>" + uid() + "</string><key>PayloadVersion</key><integer>1</integer></dict></plist>";
+  d.getElementById("iosTile").onclick = function(e){ e.preventDefault();
+    var a = d.createElement("a"); a.href = URL.createObjectURL(new Blob([xml], {type: "application/x-apple-aspen-config"})); a.download = "IKEv2-VPN.mobileconfig";
+    d.body.appendChild(a); a.click(); a.remove(); };
+})();
+</script>{% endraw %}
+<!-- pg-ikev2 end -->

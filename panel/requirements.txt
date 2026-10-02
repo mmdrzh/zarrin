@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+asyncpg==0.30.0
+aiosqlite==0.21.0
+argon2-cffi==23.1.0
+pyotp==2.9.0
+segno==1.6.6
+PyJWT==2.10.1
+httpx[socks]==0.28.1
+python-multipart==0.0.20
+cryptography==45.0.7
