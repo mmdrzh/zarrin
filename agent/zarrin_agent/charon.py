@@ -72,7 +72,7 @@ class Charon:
         self.write_conf()
         if self.running:
             for flag in ("--load-pools", "--load-conns"):
-                out = subprocess.run(["swanctl", flag, "--noprompt"], capture_output=True, text=True)
+                out = subprocess.run(["swanctl", flag], capture_output=True, text=True)
                 log.info("swanctl %s: %s", flag, (out.stdout.strip().splitlines() or [out.stderr.strip()])[-1])
 
     # ------------------------------------------------------------ lifecycle
