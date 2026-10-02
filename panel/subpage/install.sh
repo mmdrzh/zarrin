@@ -12,6 +12,8 @@ if [ "$MODE" = add ] && { [ -z "$SERVER" ] || [ -z "$PSK" ]; }; then
   echo "Zarrin is not running or the VPN domain / L2TP key is not set"; exit 1
 fi
 cp "$T" "$T.bak-ikev2-$(date +%Y%m%d-%H%M%S)"
+# Keep the five newest copies of the template.
+ls -t "$T".bak-ikev2-* 2>/dev/null | tail -n +6 | xargs -r rm -f
 python3 - "$T" "$DIR/ikev2-card.html" "$MODE" "$DIR/ikev2-head.html" "$SERVER" "$PSK" <<'PY'
 import re, sys
 path, card, mode, head, server, psk = sys.argv[1:7]
