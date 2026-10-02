@@ -381,7 +381,7 @@ async def subpage_apply(request: Request, admin=Admin):
 @router.get("/subpage/status")
 async def subpage_status(admin=Admin):
     f = SUBPAGE_DIR / "status.json"
-    pending = (SUBPAGE_DIR / "request").exists()
+    pending = (SUBPAGE_DIR / "request").exists() or (SUBPAGE_DIR / "request.running").exists()
     try:
         return {**json.loads(f.read_text()), "pending": pending}
     except (OSError, ValueError):

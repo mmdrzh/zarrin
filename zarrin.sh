@@ -89,7 +89,10 @@ UNIT
 cmd_subpage_run() {
   local d="$DIR/data/subpage"
   [ -f "$d/request" ] || exit 0
-  rm -f "$d/request"
+  # Renamed, not removed: the panel shows "pending" until this finishes, and
+  # the path unit does not fire again for the same request.
+  mv -f "$d/request" "$d/request.running"
+  trap 'rm -f "$d/request.running"' EXIT
   if out=$("$DIR/panel/subpage/install.sh" 2>&1); then
     printf '{"ok": true, "at": %s, "message": %s}\n' "$(date +%s)" "$(printf '%s' "$out" | tail -1 | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" > "$d/status.json"
   else
