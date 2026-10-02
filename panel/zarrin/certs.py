@@ -17,8 +17,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-from . import config
-from .store import store
+from . import cloudflare, config
 
 log = logging.getLogger("zarrin.certs")
 
@@ -63,17 +62,23 @@ def info() -> dict:
 
 
 async def issue() -> tuple[bool, str]:
-    """Gets a certificate from Let's Encrypt. Returns (ok, message)."""
+    """Gets a certificate from Let's Encrypt: DNS-01 through Cloudflare when a
+    credential is saved, falling back to HTTP-01 on port 80. Returns (ok, message)."""
     if not config.DOMAIN:
         return False, "no domain"
-    cf_token = (await store.get("cloudflare_token") or "").strip()
+    cf_env = await cloudflare.lego_env()
+    if cf_env:
+        ok, msg = await _lego(["--dns", "cloudflare"], cf_env)
+        if ok:
+            return ok, msg
+        log.warning("DNS-01 through Cloudflare failed; trying HTTP-01")
+    return await _lego(["--http", "--http.address", ":80"], {})
+
+
+async def _lego(challenge: list[str], extra_env: dict) -> tuple[bool, str]:
     cmd = ["lego", "run", "--path", str(ACME_DIR), "--accept-tos", "--key-type", "EC256", "--domains", config.DOMAIN]
-    env = dict(os.environ)
-    if cf_token:
-        cmd += ["--dns", "cloudflare"]
-        env["CF_DNS_API_TOKEN"] = cf_token
-    else:
-        cmd += ["--http", "--http.address", ":80"]
+    cmd += challenge
+    env = {**os.environ, **extra_env}
     if config.ACME_EMAIL:
         cmd += ["--email", config.ACME_EMAIL]
     proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,

@@ -7,6 +7,10 @@ import './style.css'
 import App from './App.vue'
 import { loadMe, session } from './api'
 
+try {
+  if (localStorage.getItem('zarrin-theme') === 'dark') document.documentElement.classList.add('dark')
+} catch {}
+
 import Login from './views/Login.vue'
 import Dashboard from './views/Dashboard.vue'
 import Nodes from './views/Nodes.vue'

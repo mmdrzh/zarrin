@@ -30,7 +30,7 @@
             <td><span class="dot" :class="n.live ? 'ok' : 'bad'"></span>{{ n.name }}</td>
             <td class="mono small">{{ n.ip }}</td>
             <td>{{ num(n.online) }} آنلاین</td>
-            <td><span v-if="n.legacy" class="badge warn">ایجنت قدیمی</span><span v-else class="badge gold">v{{ n.agent_version || '?' }}</span></td>
+            <td><span v-if="n.legacy" class="badge warn">ایجنت قدیمی</span><span v-else class="badge info">v{{ n.agent_version || '?' }}</span></td>
           </tr>
         </table>
       </div>

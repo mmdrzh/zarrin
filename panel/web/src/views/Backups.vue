@@ -4,7 +4,7 @@
       <h1>بکاپ و ریستور</h1>
       <div class="row">
         <button class="btn" :disabled="busy" @click="create(false)">بکاپ محلی</button>
-        <button class="btn gold" :disabled="busy" @click="create(true)">{{ busy ? 'در حال بکاپ...' : 'بکاپ + ارسال به تلگرام' }}</button>
+        <button class="btn primary" :disabled="busy" @click="create(true)">{{ busy ? 'در حال بکاپ...' : 'بکاپ + ارسال به تلگرام' }}</button>
       </div>
     </div>
 
@@ -39,7 +39,7 @@
         <button class="btn mt" :disabled="!files.length || uploading" @click="upload">{{ uploading ? 'در حال آپلود...' : 'آپلود و بررسی' }}</button>
         <div v-if="uploaded" class="alert ok mt">
           فایل معتبر است: ساخته‌شده در {{ date(uploaded.manifest.created) }} روی <span class="mono">{{ uploaded.manifest.host }}</span>
-          <div><button class="btn sm gold mt" @click="askRestore('upload', uploaded.upload)">ریستور این فایل</button></div>
+          <div><button class="btn sm primary mt" @click="askRestore('upload', uploaded.upload)">ریستور این فایل</button></div>
         </div>
       </div>
     </div>

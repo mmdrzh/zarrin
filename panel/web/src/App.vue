@@ -19,7 +19,10 @@
       <div class="foot">
         <div>{{ session.me?.username }}</div>
         <div class="mono small">v{{ session.me?.version }}</div>
-        <button class="btn sm ghost mt" @click="logout">خروج</button>
+        <div class="row mt">
+          <button class="btn sm ghost" @click="toggleTheme">{{ dark ? '☀ تم روشن' : '☾ تم تیره' }}</button>
+          <button class="btn sm ghost" @click="logout">خروج</button>
+        </div>
       </div>
     </aside>
     <div v-if="menu" class="backdrop" @click="menu = false"></div>
@@ -39,6 +42,12 @@ import { ref, provide, reactive } from 'vue'
 import { api, session } from './api'
 
 const menu = ref(false)
+const dark = ref(document.documentElement.classList.contains('dark'))
+function toggleTheme() {
+  dark.value = !dark.value
+  document.documentElement.classList.toggle('dark', dark.value)
+  try { localStorage.setItem('zarrin-theme', dark.value ? 'dark' : 'light') } catch {}
+}
 const toast = reactive({ text: '' })
 let timer = null
 provide('toast', (text) => {

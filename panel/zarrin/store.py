@@ -79,6 +79,7 @@ DEFAULTS: dict[str, Any] = {
     "backup_interval_hours": 1,
     "backup_keep": 24,
     "cloudflare_token": "",
+    "cloudflare_email": "",
     "pasarguard_api_key": "",
     "blocked": {},  # username -> unix time the temporary block ends
 }

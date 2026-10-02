@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from . import backup, certs, config, telegram
+from . import backup, certs, cloudflare, config, telegram
 from .api_agent import create_join_token, join_command
 from .auth import (authenticate, clear_session_cookie, client_ip, current_admin, hash_password, issue_session,
                    set_session_cookie, totp_ok, totp_uri, verify_password)
@@ -308,7 +308,7 @@ async def users(q: str = "", admin=Admin):
 # --------------------------------------------------------------- settings
 
 EDITABLE = {"ikev2_domain", "dns", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
-            "backup_interval_hours", "backup_keep", "cloudflare_token", "pasarguard_api_key"}
+            "backup_interval_hours", "backup_keep", "cloudflare_token", "cloudflare_email", "pasarguard_api_key"}
 
 
 def _mask(value: str) -> str:
@@ -324,6 +324,7 @@ async def get_settings(admin=Admin):
     for k in SECRET_KEYS:
         out[k] = _mask(out.get(k) or "")
     out["cert"] = certs.info()
+    out["cloudflare_kind"] = cloudflare.kind_of(s.get("cloudflare_token") or "")
     return out
 
 
@@ -356,6 +357,31 @@ async def telegram_test(admin=Admin):
     except Exception as exc:
         raise HTTPException(400, f"خطا: {exc}")
     return {"ok": True}
+
+
+@router.post("/settings/cloudflare/test")
+async def cloudflare_test(admin=Admin):
+    try:
+        return await cloudflare.check()
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+@router.post("/settings/pasarguard/test")
+async def pasarguard_test(admin=Admin):
+    key = (await store.get("pasarguard_api_key") or "").strip()
+    if not key:
+        return {"ok": False, "error": "API Key ثبت نشده"}
+    import httpx
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=15) as http:
+            r = await http.get(f"{config.PASARGUARD_API}/api/admin", headers={"X-Api-Key": key})
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    if r.status_code != 200:
+        return {"ok": False, "error": f"HTTP {r.status_code}"}
+    data = r.json()
+    return {"ok": True, "admin": data.get("username"), "role": (data.get("role") or {}).get("name")}
 
 
 @router.post("/certs/issue")

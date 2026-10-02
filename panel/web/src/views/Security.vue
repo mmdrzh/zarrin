@@ -8,7 +8,7 @@
         <label class="field"><span>رمز جدید (حداقل ۱۰ کاراکتر)</span><input v-model="pw.new" type="password" class="ltr" minlength="10" autocomplete="new-password" required /></label>
         <label class="field"><span>تکرار رمز جدید</span><input v-model="pw.again" type="password" class="ltr" autocomplete="new-password" required /></label>
         <div v-if="pwError" class="alert bad">{{ pwError }}</div>
-        <button class="btn gold">تغییر رمز</button>
+        <button class="btn primary">تغییر رمز</button>
       </form>
 
       <div class="card">
@@ -23,13 +23,13 @@
         </template>
         <template v-else>
           <div class="alert warn">ورود دومرحله‌ای خاموش است. فعال کردنش به‌شدت توصیه می‌شود.</div>
-          <button v-if="!setup" class="btn gold" @click="start2fa">فعال کردن</button>
+          <button v-if="!setup" class="btn primary" @click="start2fa">فعال کردن</button>
           <form v-else @submit.prevent="enable2fa">
             <p class="small">با Google Authenticator یا هر برنامه‌ی مشابه این کد را اسکن کنید:</p>
             <div class="qr mb" v-html="setup.qr"></div>
             <p class="small muted">یا کلید را دستی وارد کنید: <span class="mono">{{ setup.secret }}</span></p>
             <label class="field"><span>کد ۶ رقمی که برنامه نشان می‌دهد</span><input v-model="code" class="ltr" inputmode="numeric" required autofocus /></label>
-            <button class="btn gold">تأیید و فعال‌سازی</button>
+            <button class="btn primary">تأیید و فعال‌سازی</button>
           </form>
         </template>
       </div>

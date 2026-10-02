@@ -2,7 +2,7 @@
   <div>
     <div class="page-head">
       <h1>نودها</h1>
-      <button class="btn gold" @click="openJoin">+ افزودن نود</button>
+      <button class="btn primary" @click="openJoin">+ افزودن نود</button>
     </div>
 
     <div v-if="joinCmd" class="card mb">
@@ -34,7 +34,7 @@
                 <label class="row small"><input type="checkbox" :checked="n.settings?.ikev2?.enabled !== false" :disabled="n.legacy"
                   @change="toggle(n, 'ikev2', $event.target.checked)" /> فعال</label>
               </td>
-              <td><span v-if="n.legacy" class="badge warn">قدیمی (pg-ikev2)</span><span v-else class="badge gold">v{{ n.agent_version || '?' }}</span></td>
+              <td><span v-if="n.legacy" class="badge warn">قدیمی (pg-ikev2)</span><span v-else class="badge info">v{{ n.agent_version || '?' }}</span></td>
               <td class="row" style="flex-wrap:nowrap">
                 <button class="btn sm" @click="reinstall(n)">{{ n.legacy ? 'ارتقا' : 'نصب مجدد' }}</button>
                 <button class="btn sm" @click="rename(n)">نام</button>
@@ -51,7 +51,7 @@
         <h2>افزودن نود جدید</h2>
         <label class="field"><span>نام نود</span><input v-model="joinName" placeholder="مثلاً Node5" required autofocus /></label>
         <p class="muted small">پیش‌نیاز: سرور تازه با اوبونتو ۲۲ یا ۲۴. دستور خودش داکر و ایجنت زرین را نصب می‌کند.</p>
-        <div class="row"><button class="btn gold">ساخت دستور نصب</button><button type="button" class="btn ghost" @click="showJoin = false">انصراف</button></div>
+        <div class="row"><button class="btn primary">ساخت دستور نصب</button><button type="button" class="btn ghost" @click="showJoin = false">انصراف</button></div>
       </form>
     </div>
   </div>

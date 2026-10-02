@@ -34,7 +34,7 @@
           <tbody>
             <tr v-for="s in filtered" :key="s.node_id + s.id">
               <td class="mono"><b>{{ s.user }}</b></td>
-              <td><span class="badge gold">{{ PROTO[s.proto] || s.proto }}</span></td>
+              <td><span class="badge info">{{ PROTO[s.proto] || s.proto }}</span></td>
               <td>{{ s.node }}</td>
               <td class="mono small">{{ s.remote }}</td>
               <td class="small">{{ duration(s.since) }}</td>

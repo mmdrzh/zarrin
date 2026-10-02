@@ -18,7 +18,7 @@
       <label v-else class="field"><span>کد ۶ رقمی برنامه‌ی Authenticator</span>
         <input v-model="code" class="ltr center" inputmode="numeric" autocomplete="one-time-code" maxlength="8" autofocus required />
       </label>
-      <button class="btn gold" style="width:100%" :disabled="busy">{{ busy ? '...' : 'ورود' }}</button>
+      <button class="btn primary" style="width:100%" :disabled="busy">{{ busy ? '...' : 'ورود' }}</button>
       <button v-if="needCode" type="button" class="btn ghost sm mt" @click="needCode = false; code = ''">بازگشت</button>
     </form>
   </div>

@@ -13,7 +13,7 @@
         <span class="badge" :class="statusClass(u.status)">{{ USER_STATUS[u.status] || u.status }}</span>
         <span v-if="u.allowed" class="badge ok">مجاز به اتصال</span>
         <span v-else class="badge bad">غیرمجاز</span>
-        <span v-if="u.sessions.length" class="badge gold">{{ num(u.sessions.length) }} اتصال آنلاین</span>
+        <span v-if="u.sessions.length" class="badge info">{{ num(u.sessions.length) }} اتصال آنلاین</span>
       </div>
       <div class="grid k4 mt">
         <div><div class="muted small">رمز IKEv2 / L2TP / OpenVPN</div><div class="mono" style="font-size:20px;font-weight:800">{{ u.password || '—' }}
@@ -24,7 +24,7 @@
       </div>
       <table v-if="u.sessions.length" class="mt">
         <tr v-for="s in u.sessions" :key="s.node_id + s.id">
-          <td><span class="badge gold">{{ PROTO[s.proto] || s.proto }}</span></td><td class="mono small">{{ s.remote }}</td>
+          <td><span class="badge info">{{ PROTO[s.proto] || s.proto }}</span></td><td class="mono small">{{ s.remote }}</td>
           <td class="small">{{ duration(s.since) }}</td><td class="small">↑{{ bytes(s.up) }} ↓{{ bytes(s.down) }}</td>
         </tr>
       </table>
