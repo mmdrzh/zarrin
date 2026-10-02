@@ -28,6 +28,11 @@ cmd_update() {
   echo "==> git pull"
   # As the checkout's owner, whose deploy key can reach the private repository.
   sudo -u "$(stat -c %U "$DIR/.git")" git -C "$DIR" pull --ff-only
+  # The rest runs from the freshly pulled script, not this one bash already read.
+  exec "$DIR/zarrin.sh" update-finish
+}
+
+cmd_update_finish() {
   echo "==> building"
   compose build -q
   compose up -d
@@ -294,6 +299,7 @@ case "${1:-status}" in
   logs) compose logs --tail "${2:-100}" -f ;;
   restart) compose restart ;;
   update) cmd_update ;;
+  update-finish) cmd_update_finish ;;
   admin) shift; cmd_admin "$@" ;;
   subpage) shift; cmd_subpage "$@" ;;
   restore-run) cmd_restore_run ;;
