@@ -50,7 +50,9 @@
         <div class="alert warn">در زمان ریستور دیتابیس، پنل پاسارگاد چند دقیقه از دسترس خارج می‌شود (اتصال کاربرها به نودها معمولاً برقرار می‌ماند).
           قبل از ریستور، خودکار از وضعیت فعلی بکاپ گرفته می‌شود و دیتابیس فعلی هم با نام دیگری نگه داشته می‌شود.</div>
         <label class="row mb"><input type="checkbox" v-model="dialog.pasarguard" /> دیتابیس پاسارگاد (کاربرها، ادمین‌ها، نودها، ...)</label>
+        <label class="row mb"><input type="checkbox" v-model="dialog.files" /> فایل‌های پاسارگاد (گواهی‌های SSL و قالب صفحه‌ی ساب)</label>
         <label class="row mb"><input type="checkbox" v-model="dialog.zarrin" /> اطلاعات زرین (ادمین زرین، نودها، تنظیمات)</label>
+        <p class="muted small">فایل .env پاسارگاد جایگزین نمی‌شود (رمز دیتابیس سرور فعلی را دارد)؛ نسخه‌ی داخل بکاپ کنارش با نام <span class="mono">.env.from-backup-…</span> ذخیره می‌شود.</p>
         <label class="field"><span>برای تأیید عبارت RESTORE را بنویسید</span><input v-model="dialog.confirm" class="ltr" /></label>
         <div v-if="dialog.error" class="alert bad">{{ dialog.error }}</div>
         <div class="row"><button class="btn danger solid" :disabled="dialog.confirm !== 'RESTORE'">شروع ریستور</button>
@@ -106,12 +108,12 @@ async function upload() {
   } catch (e) { alert(e.message) } finally { uploading.value = false }
 }
 function askRestore(source, name) {
-  dialog.value = { source, name, pasarguard: true, zarrin: false, confirm: '', error: '' }
+  dialog.value = { source, name, pasarguard: true, files: true, zarrin: false, confirm: '', error: '' }
 }
 async function doRestore() {
   try {
-    const { source, name, pasarguard, zarrin, confirm } = dialog.value
-    await api.post('/api/restore', { source, name, pasarguard, zarrin, confirm })
+    const { source, name, pasarguard, files, zarrin, confirm } = dialog.value
+    await api.post('/api/restore', { source, name, pasarguard, files, zarrin, confirm })
     dialog.value = null
     toast('ریستور شروع شد')
     load()

@@ -308,7 +308,7 @@ async def users(q: str = "", admin=Admin):
 # --------------------------------------------------------------- settings
 
 EDITABLE = {"ikev2_domain", "dns", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
-            "backup_interval_hours", "backup_keep", "cloudflare_token", "cloudflare_email", "pasarguard_api_key"}
+            "backup_interval_hours", "backup_keep", "pasarguard_api_key"}
 
 
 def _mask(value: str) -> str:
@@ -324,7 +324,6 @@ async def get_settings(admin=Admin):
     for k in SECRET_KEYS:
         out[k] = _mask(out.get(k) or "")
     out["cert"] = certs.info()
-    out["cloudflare_kind"] = cloudflare.kind_of(s.get("cloudflare_token") or "")
     return out
 
 
@@ -359,12 +358,38 @@ async def telegram_test(admin=Admin):
     return {"ok": True}
 
 
-@router.post("/settings/cloudflare/test")
-async def cloudflare_test(admin=Admin):
+@router.get("/cloudflare/tokens")
+async def cf_tokens(admin=Admin):
+    return [cloudflare.public(t) for t in await cloudflare.tokens()]
+
+
+class CfTokenIn(BaseModel):
+    label: str = Field(default="", max_length=64)
+    token: str = Field(min_length=20, max_length=200)
+
+
+@router.post("/cloudflare/tokens")
+async def cf_token_add(body: CfTokenIn, request: Request, admin=Admin):
     try:
-        return await cloudflare.check()
+        item = await cloudflare.add(body.label, body.token)
+    except cloudflare.CloudflareError as exc:
+        raise HTTPException(400, str(exc))
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        raise HTTPException(400, f"خطا در ارتباط با کلودفلر: {exc}")
+    await store.audit(admin["username"], client_ip(request), "cloudflare.add", f"{item['label']}: {', '.join(item['zones'])}")
+    return cloudflare.public(item)
+
+
+@router.delete("/cloudflare/tokens/{token_id}")
+async def cf_token_delete(token_id: str, request: Request, admin=Admin):
+    await cloudflare.remove(token_id)
+    await store.audit(admin["username"], client_ip(request), "cloudflare.remove", token_id)
+    return {"ok": True}
+
+
+@router.post("/cloudflare/check")
+async def cf_check(admin=Admin):
+    return [{**cloudflare.public(t), "ok": t["ok"], "error": t.get("error")} for t in await cloudflare.refresh()]
 
 
 @router.post("/settings/pasarguard/test")
@@ -475,6 +500,7 @@ class RestoreIn(BaseModel):
     name: str = Field(max_length=128)
     pasarguard: bool = True
     zarrin: bool = False
+    files: bool = False
     confirm: str
 
 
@@ -482,7 +508,7 @@ class RestoreIn(BaseModel):
 async def restore(body: RestoreIn, request: Request, admin=Admin):
     if body.confirm != "RESTORE":
         raise HTTPException(400, "برای تأیید RESTORE را بنویسید")
-    if not (body.pasarguard or body.zarrin):
+    if not (body.pasarguard or body.zarrin or body.files):
         raise HTTPException(400, "چیزی برای ریستور انتخاب نشده")
     if body.source == "backup":
         try:
@@ -496,11 +522,12 @@ async def restore(body: RestoreIn, request: Request, admin=Admin):
         if not path.exists():
             raise HTTPException(404)
     try:
-        backup.request_restore(path, {"pasarguard": body.pasarguard, "zarrin": body.zarrin}, admin["username"])
+        backup.request_restore(path, {"pasarguard": body.pasarguard, "zarrin": body.zarrin, "files": body.files},
+                               admin["username"])
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(400, str(exc))
     await store.audit(admin["username"], client_ip(request), "restore.request",
-                      f"{body.source}:{body.name} pg={body.pasarguard} zarrin={body.zarrin}")
+                      f"{body.source}:{body.name} pg={body.pasarguard} zarrin={body.zarrin} files={body.files}")
     return {"ok": True}
 
 

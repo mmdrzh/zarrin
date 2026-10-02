@@ -66,7 +66,7 @@ async def issue() -> tuple[bool, str]:
     credential is saved, falling back to HTTP-01 on port 80. Returns (ok, message)."""
     if not config.DOMAIN:
         return False, "no domain"
-    cf_env = await cloudflare.lego_env()
+    cf_env = await cloudflare.lego_env(config.DOMAIN)
     if cf_env:
         ok, msg = await _lego(["--dns", "cloudflare"], cf_env)
         if ok:

@@ -40,23 +40,24 @@
 
       <div class="card">
         <h2>کلودفلر و گواهی SSL</h2>
-        <label class="field"><span>API Token کلودفلر (Zone → DNS → Edit)</span>
-          <input v-model="s.cloudflare_token" class="ltr" autocomplete="off" />
-          <div class="hint">برای گرفتن گواهی با DNS و اضافه/حذف خودکار IP نودها در رکورد IKEv2.</div></label>
-        <div v-if="s.cloudflare_kind === 'global_key'" class="alert warn">
-          این <b>Global API Key</b> است، نه API Token. Global Key کنترل کامل کل حساب کلودفلر (همه‌ی دامنه‌ها) را می‌دهد و اگر سرور یا یک بکاپ لو برود، همه‌ی دامنه‌ها در خطرند.
-          زرین فقط به ویرایش DNS نیاز دارد؛ لطفاً یک API Token با قالب «Edit zone DNS» بسازید و جایگزین کنید.
-          <label class="field mt"><span>ایمیل حساب کلودفلر (فقط برای Global Key لازم است)</span>
-            <input v-model="s.cloudflare_email" class="ltr" autocomplete="off" /></label>
+        <p class="muted small">برای هر حساب کلودفلر یک API Token با قالب «Edit zone DNS» بسازید و اینجا اضافه کنید.
+          زرین برای هر دامنه خودش توکن درست را پیدا می‌کند (گواهی پنل، رکورد IKEv2 نودها).</p>
+        <div v-for="t in cfTokens" :key="t.id" class="row mb" style="align-items:flex-start;border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px">
+          <div style="flex:1;min-width:0">
+            <b>{{ t.label }}</b> <span class="mono muted small">{{ t.token }}</span>
+            <span v-if="t.ok === false" class="badge bad">{{ t.error }}</span>
+            <div class="small"><span class="muted">دامنه‌ها:</span> <span class="mono">{{ t.zones.join('، ') || '—' }}</span></div>
+          </div>
+          <button class="btn sm danger" @click="removeCf(t)">حذف</button>
         </div>
-        <div class="row mb">
-          <button class="btn" @click="testCf">تست اتصال کلودفلر</button>
-        </div>
-        <div v-if="cfTest" class="alert" :class="cfTest.ok ? 'ok' : 'bad'">
-          <template v-if="cfTest.ok">درست است ({{ cfTest.kind === 'token' ? 'API Token' : 'Global Key' }}) — دامنه‌های در دسترس:
-            <span class="mono">{{ cfTest.zones.join('، ') || 'هیچ' }}</span></template>
-          <template v-else>{{ cfTest.error }}</template>
-        </div>
+        <form class="row mb" @submit.prevent="addCf">
+          <input v-model="cfNew.label" placeholder="نام (مثلاً حساب دوم)" style="flex:1;min-width:120px" />
+          <input v-model="cfNew.token" class="ltr" placeholder="API Token" autocomplete="off" style="flex:2;min-width:180px" />
+          <button class="btn primary" :disabled="cfBusy || !cfNew.token">{{ cfBusy ? '...' : 'افزودن' }}</button>
+        </form>
+        <div v-if="cfError" class="alert bad">{{ cfError }}</div>
+        <div v-if="ikevNoToken" class="alert warn">هیچ‌کدام از توکن‌ها به دامنه‌ی IKEv2 (<span class="mono">{{ s.ikev2_domain }}</span>) دسترسی ندارند.</div>
+        <button class="btn sm mb" @click="checkCf">بررسی دوباره‌ی همه</button>
         <div class="small mb">گواهی پنل (<span class="mono">{{ s.cert.domain }}</span>):
           <span v-if="s.cert.self_signed" class="badge warn">موقت (خودامضا)</span>
           <span v-else class="badge ok">معتبر — {{ num(Math.floor(s.cert.days_left)) }} روز مانده</span></div>
@@ -67,23 +68,52 @@
 </template>
 
 <script setup>
-import { ref, onMounted, inject } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { api, num } from '../api'
 
 const toast = inject('toast')
 const s = ref(null)
 const saving = ref(false)
 const issuing = ref(false)
-const cfTest = ref(null)
+const cfTokens = ref([])
+const cfNew = ref({ label: '', token: '' })
+const cfBusy = ref(false)
+const cfError = ref('')
 const pgTest = ref(null)
 
-async function load() { s.value = await api.get('/api/settings') }
+async function load() {
+  s.value = await api.get('/api/settings')
+  cfTokens.value = await api.get('/api/cloudflare/tokens')
+}
 onMounted(load)
+
+const ikevNoToken = computed(() => {
+  const d = (s.value?.ikev2_domain || '').toLowerCase()
+  return d && cfTokens.value.length && !cfTokens.value.some((t) => t.zones.some((z) => d === z || d.endsWith('.' + z)))
+})
+async function addCf() {
+  cfBusy.value = true; cfError.value = ''
+  try {
+    await api.post('/api/cloudflare/tokens', cfNew.value)
+    cfNew.value = { label: '', token: '' }
+    cfTokens.value = await api.get('/api/cloudflare/tokens')
+    toast('توکن اضافه شد')
+  } catch (e) { cfError.value = e.message } finally { cfBusy.value = false }
+}
+async function removeCf(t) {
+  if (!confirm(`توکن «${t.label}» حذف شود؟`)) return
+  await api.del(`/api/cloudflare/tokens/${t.id}`)
+  cfTokens.value = await api.get('/api/cloudflare/tokens')
+}
+async function checkCf() {
+  cfError.value = ''
+  try { cfTokens.value = await api.post('/api/cloudflare/check'); toast('بررسی شد') } catch (e) { cfError.value = e.message }
+}
 
 async function save() {
   saving.value = true
   try {
-    const { cert, cloudflare_kind, ...body } = s.value
+    const { cert, ...body } = s.value
     await api.put('/api/settings', body)
     toast('ذخیره شد')
     load()
@@ -91,10 +121,6 @@ async function save() {
 }
 async function testTelegram() {
   try { await save(); await api.post('/api/settings/telegram/test'); toast('پیام ارسال شد ✅') } catch (e) { alert(e.message) }
-}
-async function testCf() {
-  cfTest.value = null
-  try { await save(); cfTest.value = await api.post('/api/settings/cloudflare/test') } catch (e) { cfTest.value = { ok: false, error: e.message } }
 }
 async function testPg() {
   pgTest.value = null

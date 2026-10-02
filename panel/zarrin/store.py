@@ -78,14 +78,14 @@ DEFAULTS: dict[str, Any] = {
     "telegram_proxy": "",
     "backup_interval_hours": 1,
     "backup_keep": 24,
-    "cloudflare_token": "",
-    "cloudflare_email": "",
+    "cloudflare_token": "",  # older single-token setting, moved into cloudflare_tokens
+    "cloudflare_tokens": [],
     "pasarguard_api_key": "",
     "blocked": {},  # username -> unix time the temporary block ends
 }
 
 # Settings whose value is never sent back to the browser in full.
-SECRET_KEYS = {"telegram_bot_token", "cloudflare_token", "pasarguard_api_key"}
+SECRET_KEYS = {"telegram_bot_token", "pasarguard_api_key"}
 
 
 class Store:

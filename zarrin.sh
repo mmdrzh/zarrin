@@ -83,8 +83,9 @@ cmd_restore_run() {
   req="$DIR/data/restore/request.running.json"
   trap 'status failed "خطا: ریستور متوقف شد (جزئیات: journalctl -u zarrin-restore)"; compose_pg up -d >/dev/null 2>&1 || true; rm -rf "$work"' ERR
 
-  local file pg zr
+  local file pg zr files
   file=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["file"])' "$req")
+  files=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1])).get("files", False)))' "$req")
   pg=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["pasarguard"]))' "$req")
   zr=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["zarrin"]))' "$req")
   case "$file" in *..*|/*) status failed "مسیر فایل نامعتبر"; exit 1;; esac
@@ -92,10 +93,16 @@ cmd_restore_run() {
   status running "شروع ریستور از $(basename "$archive")"
 
   rm -rf "$work"; mkdir -p "$work"
-  tar -xzf "$archive" -C "$work" manifest.json $( [ "$pg" = 1 ] && echo pasarguard.dump ) $( [ "$zr" = 1 ] && echo zarrin.db )
+  tar -xzf "$archive" -C "$work" manifest.json $( [ "$pg" = 1 ] && echo pasarguard.dump ) $( [ "$zr" = 1 ] && echo zarrin.db ) \
+    $( [ "$files" = 1 ] && echo pasarguard-data pasarguard )
   local ts; ts=$(date +%Y%m%d%H%M%S)
 
+  if [ "$files" = 1 ]; then restore_files "$work" "$ts"; fi
   if [ "$pg" = 1 ]; then restore_pasarguard "$work/pasarguard.dump" "$ts"; fi
+  if [ "$files" = 1 ] && [ "$pg" != 1 ]; then
+    PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
+    compose_pg restart $(compose_pg config --services | grep -vE 'timescale|postgres|^db$|pgadmin') >/dev/null 2>&1 || true
+  fi
   if [ "$zr" = 1 ]; then
     status running "ریستور اطلاعات زرین..."
     compose stop zarrin
@@ -168,6 +175,26 @@ restore_pasarguard() {
   "${psql[@]}" -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE '${db_name}_before_restore_%' ORDER BY datname DESC OFFSET 1" |
     while read -r name; do [ -n "$name" ] && "${psql[@]}" -d postgres -c "DROP DATABASE \"$name\"" || true; done
   status running "دیتابیس قبلی با نام $old نگه داشته شد."
+}
+
+restore_files() {
+  local work=$1 ts=$2 data
+  PG_DIR=$(env_get PASARGUARD_HOST_DIR); PG_DIR=${PG_DIR:-/opt/pasarguard}
+  data=$(env_get PASARGUARD_HOST_DATA); data=${data:-/var/lib/pasarguard}
+  status running "ریستور گواهی‌ها و قالب‌های پاسارگاد..."
+  mkdir -p "$DIR/data/backups"
+  tar -czf "$DIR/data/backups/files-before-restore-$ts.tar.gz" -C "$data" templates certs 2>/dev/null || true
+  chmod 600 "$DIR/data/backups/files-before-restore-$ts.tar.gz" 2>/dev/null || true
+  for sub in templates certs; do
+    if [ -d "$work/pasarguard-data/$sub" ]; then
+      mkdir -p "$data/$sub"
+      cp -a "$work/pasarguard-data/$sub/." "$data/$sub/"
+    fi
+  done
+  if [ -f "$work/pasarguard/.env" ]; then
+    install -m 600 "$work/pasarguard/.env" "$PG_DIR/.env.from-backup-$ts"
+    status running ".env بکاپ در $PG_DIR/.env.from-backup-$ts ذخیره شد (جایگزین نشد)."
+  fi
 }
 
 cmd_subpage() {
