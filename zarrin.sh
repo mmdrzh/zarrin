@@ -25,7 +25,8 @@ cmd_status() {
 
 cmd_update() {
   echo "==> git pull"
-  git -C "$DIR" pull --ff-only
+  # As the checkout's owner, whose deploy key can reach the private repository.
+  sudo -u "$(stat -c %U "$DIR/.git")" git -C "$DIR" pull --ff-only
   echo "==> building"
   compose build -q
   compose up -d
