@@ -17,8 +17,13 @@ if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 
-# VPN clients' traffic is forwarded by the kernel.
-echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/90-zarrin.conf
+# VPN clients are forwarded by the kernel; service ports are kept out of the
+# ephemeral range (often widened to 1024-65000 on VPN servers), or a busy
+# Xray can take them and the service fails to bind.
+cat > /etc/sysctl.d/90-zarrin.conf <<'SYSCTL'
+net.ipv4.ip_forward=1
+net.ipv4.ip_local_reserved_ports=1194,1701,51820-51829,62050-62059
+SYSCTL
 sysctl -q -p /etc/sysctl.d/90-zarrin.conf
 
 say "Downloading the agent from the panel"
