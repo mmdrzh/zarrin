@@ -82,6 +82,9 @@ async def profile(proto: str, server: str) -> str:
         "resolv-retry infinite", "nobind", "persist-key", "persist-tun",
         "remote-cert-tls server", f"verify-x509-name {SERVER_NAME} name",
         "auth-user-pass",
+        # Tells OpenVPN Connect there is no client certificate to ask for
+        # (login is username/password only); plain OpenVPN ignores it.
+        "setenv CLIENT_CERT 0",
         "data-ciphers AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305", "tls-version-min 1.2",
         "verb 3",
     ]
