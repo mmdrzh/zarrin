@@ -25,7 +25,7 @@ from .openvpn import OpenVPN
 from .panel import panel
 from .usage import Usage
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 log = logging.getLogger("zarrin.agent")
@@ -35,6 +35,21 @@ STATS_INTERVAL = 10
 REPORT_INTERVAL = 15
 CONFIG_INTERVAL = 30
 LEGACY_PENDING = Path("/data/legacy-pending.json")
+
+
+def listening_ports() -> set[tuple[str, int]]:
+    """(proto, port) of every listening TCP socket and bound UDP socket."""
+    out = set()
+    for proto, files, state in (("tcp", ("/proc/net/tcp", "/proc/net/tcp6"), "0A"), ("udp", ("/proc/net/udp", "/proc/net/udp6"), "07")):
+        for f in files:
+            try:
+                for line in Path(f).read_text().splitlines()[1:]:
+                    parts = line.split()
+                    if parts[3] == state:
+                        out.add((proto, int(parts[1].rsplit(":", 1)[1], 16)))
+            except (OSError, IndexError, ValueError):
+                pass
+    return out
 
 
 class Agent:
@@ -50,6 +65,7 @@ class Agent:
         self.users_synced = False
         self.sessions: list[dict] = []
         self.cert_reported = False
+        self.warned: set[tuple[str, int]] = set()
 
     # -------------------------------------------------------------- config
 
@@ -61,7 +77,7 @@ class Agent:
         for w in wanted.values():
             if w.get("enabled"):
                 pools += [w[k] for k in ("pool", "pool_udp", "pool_tcp") if w.get(k)]
-        firewall.ensure(pools, l2tp=bool(wanted["l2tp"].get("enabled")))
+        firewall.ensure(pools, l2tp=bool(wanted["l2tp"].get("enabled")), redirects=self.redirects(wanted["openvpn"]))
         for svc in self.services:
             want = wanted[svc.name]
             if want.get("enabled"):
@@ -83,6 +99,27 @@ class Agent:
         if not any(svc.enabled for svc in self.services) and charon.running:
             charon.stop()
         self.cfg = cfg
+
+    def redirects(self, ovpn: dict) -> list[tuple[str, int, int]]:
+        """OpenVPN's alternative ports, minus any port something on this
+        server listens on (a PasarGuard inbound must never be hijacked)."""
+        if not ovpn.get("enabled"):
+            return []
+        listening = listening_ports()
+        out = []
+        for proto, main_key, alt_key in (("udp", "udp_port", "udp_alt"), ("tcp", "tcp_port", "tcp_alt")):
+            main = int(ovpn.get(main_key) or 0)
+            for port in ovpn.get(alt_key) or []:
+                port = int(port)
+                if not main or port == main:
+                    continue
+                if (proto, port) in listening:
+                    if (proto, port) not in self.warned:
+                        log.warning("OpenVPN: %s/%s is in use on this server; not redirecting it", proto, port)
+                        self.warned.add((proto, port))
+                    continue
+                out.append((proto, port, main))
+        return out
 
     def start_service(self, svc, want: dict, dns: str, cfg: dict) -> None:
         if svc is self.ikev2:

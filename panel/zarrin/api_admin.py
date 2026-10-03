@@ -315,7 +315,7 @@ async def connection_info(admin=Admin):
 
 @router.get("/openvpn/{proto}.ovpn")
 async def openvpn_profile(proto: str, admin=Admin):
-    if proto not in ("udp", "tcp"):
+    if proto not in ("udp", "tcp", "auto"):
         raise HTTPException(404)
     server = await store.get("ikev2_domain")
     return PlainTextResponse(await ovpn.profile(proto, server), media_type="application/x-openvpn-profile",
@@ -324,7 +324,8 @@ async def openvpn_profile(proto: str, admin=Admin):
 
 # --------------------------------------------------------------- settings
 
-EDITABLE = {"ikev2_domain", "dns", "l2tp_psk", "ovpn_udp_port", "ovpn_tcp_port", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
+EDITABLE = {"ikev2_domain", "dns", "l2tp_psk", "ovpn_udp_port", "ovpn_tcp_port",
+            "ovpn_udp_alt_ports", "ovpn_tcp_alt_ports", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
             "backup_interval_hours", "backup_keep", "pasarguard_api_key"}
 
 
@@ -360,6 +361,8 @@ async def put_settings(body: dict, request: Request, admin=Admin):
             value = int(value or 0)
             if not 0 <= value <= 65535:
                 raise HTTPException(400, "پورت نامعتبر است")
+        elif key in ("ovpn_udp_alt_ports", "ovpn_tcp_alt_ports"):
+            value = ",".join(str(p) for p in ovpn.parse_ports(value)[:8])
         elif key == "l2tp_psk":
             value = str(value or "").strip()
             if not (8 <= len(value) <= 64) or not value.isascii() or '"' in value or " " in value:
@@ -371,7 +374,8 @@ async def put_settings(body: dict, request: Request, admin=Admin):
         await store.set(key, value)
         changed.append(key)
     await store.audit(admin["username"], client_ip(request), "settings.update", ",".join(changed))
-    if {"ikev2_domain", "l2tp_psk", "ovpn_udp_port", "ovpn_tcp_port"} & set(changed):
+    if {"ikev2_domain", "l2tp_psk", "ovpn_udp_port", "ovpn_tcp_port", "ovpn_udp_alt_ports",
+            "ovpn_tcp_alt_ports"} & set(changed):
         request_subpage_refresh()
     return {"ok": True, "changed": changed}
 

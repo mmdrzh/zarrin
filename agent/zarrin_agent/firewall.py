@@ -14,15 +14,25 @@ from pathlib import Path
 log = logging.getLogger("zarrin.firewall")
 
 CHAINS = (("filter", "FORWARD", "ZARRIN-FWD"), ("nat", "POSTROUTING", "ZARRIN-NAT"), ("mangle", "FORWARD", "ZARRIN-MSS"),
-          ("filter", "INPUT", "ZARRIN-IN"))
+          ("filter", "INPUT", "ZARRIN-IN"), ("nat", "PREROUTING", "ZARRIN-PRE"))
+# What each chain was last built with, so a change of content (not only of
+# rule count) rebuilds it.
+_applied: dict[str, list[list[str]]] = {}
 
 
 def run(*cmd: str, check: bool = False) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, check=check)
 
 
-def _rules(pools: list[str], mss: str, l2tp: bool) -> dict[str, list[list[str]]]:
-    body = {"ZARRIN-FWD": [], "ZARRIN-NAT": [], "ZARRIN-MSS": [], "ZARRIN-IN": []}
+def _rules(pools: list[str], mss: str, l2tp: bool, redirects: list[tuple[str, int, int]]) -> dict[str, list[list[str]]]:
+    body = {"ZARRIN-FWD": [], "ZARRIN-NAT": [], "ZARRIN-MSS": [], "ZARRIN-IN": [], "ZARRIN-PRE": []}
+    # Extra ports for a service (OpenVPN's alternative ports): new incoming
+    # connections are redirected to the port the service listens on. Only new
+    # connections pass through nat PREROUTING, so replies to this server's own
+    # outgoing connections that happen to use the same port are untouched.
+    for proto, port, to in redirects:
+        body["ZARRIN-PRE"].append(["-p", proto, "--dport", str(port), "-m", "addrtype", "--dst-type", "LOCAL",
+                                   "-j", "REDIRECT", "--to-ports", str(to)])
     if l2tp:
         # L2TP itself is unencrypted: accept it only from inside IPsec.
         body["ZARRIN-IN"] = [
@@ -39,13 +49,14 @@ def _rules(pools: list[str], mss: str, l2tp: bool) -> dict[str, list[list[str]]]
     return body
 
 
-def ensure(pools: list[str], mss: str = "1250", l2tp: bool = False) -> None:
+def ensure(pools: list[str], mss: str = "1250", l2tp: bool = False,
+           redirects: list[tuple[str, int, int]] | None = None) -> None:
     """Idempotent: a chain is rebuilt only when it does not hold exactly the
     rules for these pools, and the jump into it is put back if something
     (a Docker restart) removed it."""
     if Path("/proc/sys/net/ipv4/ip_forward").read_text().strip() != "1":
         run("sysctl", "-w", "net.ipv4.ip_forward=1")
-    body = _rules(pools, mss, l2tp)
+    body = _rules(pools, mss, l2tp, redirects or [])
     for table, parent, chain in CHAINS:
         listing = run("iptables", "-t", table, "-S", chain)
         if listing.returncode != 0:
@@ -53,12 +64,13 @@ def ensure(pools: list[str], mss: str = "1250", l2tp: bool = False) -> None:
             have = []
         else:
             have = [ln for ln in listing.stdout.splitlines() if ln.startswith("-A ")]
-        ok = len(have) == len(body[chain]) and (chain == "ZARRIN-IN" or all(any(p in ln for ln in have) for p in pools))
+        ok = len(have) == len(body[chain]) and _applied.get(chain) == body[chain]
         if not ok:
             run("iptables", "-t", table, "-F", chain)
             for rule in body[chain]:
                 run("iptables", "-t", table, "-A", chain, *rule, check=True)
-            log.info("firewall: %s rebuilt (%s)", chain, ", ".join(pools) or "no pools")
+            _applied[chain] = body[chain]
+            log.info("firewall: %s rebuilt (%d rules)", chain, len(body[chain]))
         if run("iptables", "-t", table, "-C", parent, "-j", chain).returncode != 0:
             run("iptables", "-t", table, "-I", parent, "1", "-j", chain, check=True)
 

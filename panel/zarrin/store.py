@@ -76,6 +76,8 @@ DEFAULTS: dict[str, Any] = {
     "l2tp_psk": "",
     "ovpn_udp_port": 1194,
     "ovpn_tcp_port": 443,
+    "ovpn_udp_alt_ports": "443,2408",
+    "ovpn_tcp_alt_ports": "2053,2087",
     "telegram_bot_token": "",
     "telegram_chat_id": "",
     "telegram_proxy": "",

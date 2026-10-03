@@ -72,22 +72,48 @@ async def ports() -> tuple[int, int]:
     return int(await store.get("ovpn_udp_port") or 0), int(await store.get("ovpn_tcp_port") or 0)
 
 
-async def profile(proto: str, server: str) -> str:
-    """The client profile; username and password are asked by the app."""
-    keys = await pki()
+def parse_ports(text) -> list[int]:
+    out = []
+    for part in str(text or "").replace(" ", "").split(","):
+        if part.isdigit() and 0 < int(part) < 65536 and int(part) not in out:
+            out.append(int(part))
+    return out
+
+
+async def alt_ports() -> tuple[list[int], list[int]]:
+    return parse_ports(await store.get("ovpn_udp_alt_ports")), parse_ports(await store.get("ovpn_tcp_alt_ports"))
+
+
+async def remotes(proto: str) -> list[tuple[int, str]]:
+    """(port, proto) in the order a client should try them: the main port
+    first, then the alternatives; "auto" is every UDP port, then every TCP one."""
     udp, tcp = await ports()
-    port = udp if proto == "udp" else tcp
-    lines = [
-        "client", "dev tun", f"proto {'udp' if proto == 'udp' else 'tcp-client'}", f"remote {server} {port}",
-        "resolv-retry infinite", "nobind", "persist-key", "persist-tun",
-        "remote-cert-tls server", f"verify-x509-name {SERVER_NAME} name",
-        "auth-user-pass",
-        # Tells OpenVPN Connect there is no client certificate to ask for
-        # (login is username/password only); plain OpenVPN ignores it.
-        "setenv CLIENT_CERT 0",
-        "data-ciphers AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305", "tls-version-min 1.2",
-        "verb 3",
-    ]
+    udp_alt, tcp_alt = await alt_ports()
+    out = []
+    if proto in ("udp", "auto") and udp:
+        out += [(p, "udp") for p in [udp] + [p for p in udp_alt if p != udp]]
+    if proto in ("tcp", "auto") and tcp:
+        out += [(p, "tcp-client") for p in [tcp] + [p for p in tcp_alt if p != tcp]]
+    return out
+
+
+async def profile(proto: str, server: str) -> str:
+    """The client profile; username and password are asked by the app. Every
+    port is a `remote` line, so the app moves on to the next one when a port
+    is blocked (after server-poll-timeout)."""
+    keys = await pki()
+    targets = await remotes(proto)
+    lines = ["client", "dev tun",
+             *[f"remote {server} {port} {p}" for port, p in targets],
+             "server-poll-timeout 5", "connect-retry 2",
+             "resolv-retry infinite", "nobind", "persist-key", "persist-tun",
+             "remote-cert-tls server", f"verify-x509-name {SERVER_NAME} name",
+             "auth-user-pass",
+             # Tells OpenVPN Connect there is no client certificate to ask for
+             # (login is username/password only); plain OpenVPN ignores it.
+             "setenv CLIENT_CERT 0",
+             "data-ciphers AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305", "tls-version-min 1.2",
+             "verb 3"]
     if proto == "udp":
         lines.append("explicit-exit-notify 1")
     return ("\n".join(lines) + "\n"

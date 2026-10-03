@@ -18,7 +18,15 @@
           <label class="field" style="flex:1"><span>پورت OpenVPN TCP (۰ = خاموش)</span>
             <input v-model.number="s.ovpn_tcp_port" type="number" min="0" max="65535" class="ltr" /></label>
         </div>
+        <div class="row">
+          <label class="field" style="flex:1"><span>پورت‌های جایگزین UDP</span>
+            <input v-model="s.ovpn_udp_alt_ports" class="ltr" placeholder="443,2408" /></label>
+          <label class="field" style="flex:1"><span>پورت‌های جایگزین TCP</span>
+            <input v-model="s.ovpn_tcp_alt_ports" class="ltr" placeholder="2053,2087" /></label>
+        </div>
+        <div class="hint mb">روی نودها به پورت اصلی هدایت می‌شوند؛ فایل «خودکار» همه را به ترتیب امتحان می‌کند. پورتی که روی نود در حال استفاده باشد (مثلاً اینباند پاسارگاد) خودکار رد می‌شود.</div>
         <div class="row mb">
+          <a class="btn sm" href="/api/openvpn/auto.ovpn">فایل OpenVPN خودکار</a>
           <a class="btn sm" href="/api/openvpn/udp.ovpn">دانلود فایل OpenVPN UDP</a>
           <a class="btn sm" href="/api/openvpn/tcp.ovpn">دانلود فایل OpenVPN TCP</a>
         </div>

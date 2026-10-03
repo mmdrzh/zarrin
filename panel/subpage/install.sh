@@ -18,7 +18,7 @@ import json, re, sys
 path, card, mode, head, values = sys.argv[1:6]
 v = json.loads(values or "{}")
 # Inside <script>: a JSON literal, with "</" escaped so nothing can close the tag.
-ovpn = json.dumps({"udp": v.get("ovpn_udp", ""), "tcp": v.get("ovpn_tcp", "")}).replace("</", "<\\/")
+ovpn = json.dumps({"auto": v.get("ovpn_auto", ""), "udp": v.get("ovpn_udp", ""), "tcp": v.get("ovpn_tcp", "")}).replace("</", "<\\/")
 def fill(text):
     return (text.replace("__VPN_SERVER__", v.get("server", "")).replace("__L2TP_PSK__", v.get("psk", ""))
             .replace("__OVPN_JSON__", ovpn))

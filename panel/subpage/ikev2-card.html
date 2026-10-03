@@ -134,14 +134,19 @@ ol.steps .c{color:var(--acc)}
 
   <details class="guide" id="ovpn"><summary>OpenVPN · همه‌ی دستگاه‌ها (با برنامه)</summary>
     <div class="tiles" style="margin-bottom:10px">
+      <a class="tile" href="#" data-ovpn="auto">
+        <span class="tile-ic imp">★</span>
+        <span class="tile-t"><b>فایل خودکار (پیشنهادی)</b><small>همه‌ی راه‌ها را امتحان می‌کند تا یکی وصل شود</small></span>
+        <span class="go">دانلود</span>
+      </a>
       <a class="tile" href="#" data-ovpn="udp">
         <span class="tile-ic imp">U</span>
-        <span class="tile-t"><b>فایل UDP</b><small>سریع‌تر؛ اول این را امتحان کنید</small></span>
+        <span class="tile-t"><b>فقط UDP</b><small>سریع‌تر</small></span>
         <span class="go">دانلود</span>
       </a>
       <a class="tile" href="#" data-ovpn="tcp">
         <span class="tile-ic imp">T</span>
-        <span class="tile-t"><b>فایل TCP</b><small>اگر UDP وصل نشد</small></span>
+        <span class="tile-t"><b>فقط TCP</b><small>برای شبکه‌هایی که UDP را می‌بندند</small></span>
         <span class="go">دانلود</span>
       </a>
     </div>
@@ -154,7 +159,7 @@ ol.steps .c{color:var(--acc)}
         <a href="https://apps.apple.com/app/openvpn-connect/id590379981" target="_blank" rel="noopener">آیفون</a> ·
         <a href="https://play.google.com/store/apps/details?id=net.openvpn.openvpn" target="_blank" rel="noopener">اندروید</a> ·
         <a href="https://openvpn.net/client/" target="_blank" rel="noopener">ویندوز و مک</a></li>
-      <li>یکی از فایل‌های بالا را دانلود و در برنامه <span class="c">Import</span> کنید (روی آیفون: بعد از دانلود، Share › OpenVPN).</li>
+      <li>«فایل خودکار» را دانلود و در برنامه <span class="c">Import</span> کنید (روی آیفون: بعد از دانلود، Share › OpenVPN). اتصال اول ممکن است چند ثانیه طول بکشد تا راه باز پیدا شود.</li>
       <li>نام کاربری و رمز بالا را وارد کنید و <span class="c">Connect</span> را بزنید.</li>
     </ol>
   </details>

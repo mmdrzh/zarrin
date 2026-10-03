@@ -22,7 +22,7 @@ fi
 # Xray can take them and the service fails to bind.
 cat > /etc/sysctl.d/90-zarrin.conf <<'SYSCTL'
 net.ipv4.ip_forward=1
-net.ipv4.ip_local_reserved_ports=1194,1701,51820-51829,62050-62059
+net.ipv4.ip_local_reserved_ports=1194,1701,2053,2087,2408,51820-51829,62050-62059
 SYSCTL
 sysctl -q -p /etc/sysctl.d/90-zarrin.conf
 # L2TP's PPP sessions and the IPsec policy match for its firewall rule.

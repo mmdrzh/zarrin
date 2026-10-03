@@ -80,6 +80,7 @@ async def node_config(node: dict) -> dict:
     l2tp = own.get("l2tp", {})
     openvpn = own.get("openvpn", {})
     udp_port, tcp_port = await ovpn.ports()
+    udp_alt, tcp_alt = await ovpn.alt_ports()
     keys = await ovpn.pki()
     return {
         "node": {"id": node["id"], "name": node["name"], "ip": node["ip"]},
@@ -99,7 +100,7 @@ async def node_config(node: dict) -> dict:
         },
         "openvpn": {
             "enabled": bool(openvpn.get("enabled", False)) and bool(udp_port or tcp_port),
-            "udp_port": udp_port, "tcp_port": tcp_port,
+            "udp_port": udp_port, "tcp_port": tcp_port, "udp_alt": udp_alt, "tcp_alt": tcp_alt,
             "pool_udp": ovpn.POOL_UDP, "pool_tcp": ovpn.POOL_TCP,
             "ca": keys["ca"], "cert": keys["cert"], "key": keys["key"], "tls_crypt": keys["tls_crypt"],
         },

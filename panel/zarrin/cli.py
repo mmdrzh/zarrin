@@ -113,6 +113,7 @@ async def cmd_card_values() -> None:
         "psk": await store.get("l2tp_psk") or "",
         "ovpn_udp": await ovpn.profile("udp", server) if udp else "",
         "ovpn_tcp": await ovpn.profile("tcp", server) if tcp else "",
+        "ovpn_auto": await ovpn.profile("auto", server) if udp or tcp else "",
     }))
     await store.close()
 
