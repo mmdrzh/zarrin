@@ -12,6 +12,8 @@ services:
     # L2TP: pppd needs the host's PPP device.
     devices:
       - /dev/ppp:/dev/ppp
+      # OpenVPN's tun interfaces.
+      - /dev/net/tun:/dev/net/tun
     env_file: .env
     stop_grace_period: 30s
     volumes:

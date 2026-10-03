@@ -17,7 +17,7 @@ RUN curl -fsSL "https://download.strongswan.org/strongswan-${STRONGSWAN_VERSION}
 
 FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libgmp10 libssl3 iptables iproute2 procps ca-certificates xl2tpd ppp \
+      libgmp10 libssl3 iptables iproute2 procps ca-certificates xl2tpd ppp openvpn \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=strongswan /build/ /
 COPY --from=goacme/lego:v5.5.2 /lego /usr/local/bin/lego

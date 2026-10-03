@@ -13,6 +13,16 @@
           <input v-model="s.l2tp_psk" class="ltr mono" autocomplete="off" />
           <div class="hint">برای همه‌ی کاربران و نودها یکی است. با عوض کردنش، همه‌ی کاربران L2TP باید کلید را در دستگاهشان عوض کنند.</div></label>
         <div class="row">
+          <label class="field" style="flex:1"><span>پورت OpenVPN UDP (۰ = خاموش)</span>
+            <input v-model.number="s.ovpn_udp_port" type="number" min="0" max="65535" class="ltr" /></label>
+          <label class="field" style="flex:1"><span>پورت OpenVPN TCP (۰ = خاموش)</span>
+            <input v-model.number="s.ovpn_tcp_port" type="number" min="0" max="65535" class="ltr" /></label>
+        </div>
+        <div class="row mb">
+          <a class="btn sm" href="/api/openvpn/udp.ovpn">دانلود فایل OpenVPN UDP</a>
+          <a class="btn sm" href="/api/openvpn/tcp.ovpn">دانلود فایل OpenVPN TCP</a>
+        </div>
+        <div class="row">
           <button class="btn" @click="applySubpage">به‌روزرسانی کارت صفحه‌ی ساب</button>
           <span v-if="subpage" class="small" :style="{ color: subpage.ok ? 'var(--ok)' : subpage.ok === false ? 'var(--bad)' : 'var(--muted)' }">
             {{ subpage.pending ? 'در حال اعمال...' : subpage.ok ? 'اعمال شد ' + ago(subpage.at) : subpage.ok === false ? subpage.message : '' }}</span>

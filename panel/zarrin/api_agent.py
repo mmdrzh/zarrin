@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
 
 from . import config
+from . import ovpn
 from .auth import client_ip, new_token, sha256
 from .pg import pg
 from .runtime import runtime
@@ -77,6 +78,9 @@ async def node_config(node: dict) -> dict:
     peers = [r["ip"] for r in await store.fetchall("SELECT ip FROM nodes WHERE id != ?", node["id"])]
     ikev2 = own.get("ikev2", {})
     l2tp = own.get("l2tp", {})
+    openvpn = own.get("openvpn", {})
+    udp_port, tcp_port = await ovpn.ports()
+    keys = await ovpn.pki()
     return {
         "node": {"id": node["id"], "name": node["name"], "ip": node["ip"]},
         "dns": settings["dns"],
@@ -92,6 +96,12 @@ async def node_config(node: dict) -> dict:
             "enabled": bool(l2tp.get("enabled", False)) and bool(settings["l2tp_psk"]),
             "pool": l2tp.get("pool", DEFAULT_POOLS["l2tp"]),
             "psk": settings["l2tp_psk"],
+        },
+        "openvpn": {
+            "enabled": bool(openvpn.get("enabled", False)) and bool(udp_port or tcp_port),
+            "udp_port": udp_port, "tcp_port": tcp_port,
+            "pool_udp": ovpn.POOL_UDP, "pool_tcp": ovpn.POOL_TCP,
+            "ca": keys["ca"], "cert": keys["cert"], "key": keys["key"], "tls_crypt": keys["tls_crypt"],
         },
     }
 

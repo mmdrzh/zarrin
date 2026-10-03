@@ -26,8 +26,8 @@ net.ipv4.ip_local_reserved_ports=1194,1701,51820-51829,62050-62059
 SYSCTL
 sysctl -q -p /etc/sysctl.d/90-zarrin.conf
 # L2TP's PPP sessions and the IPsec policy match for its firewall rule.
-printf '%s\n' ppp_generic ppp_async xt_policy > /etc/modules-load.d/zarrin.conf
-for m in ppp_generic ppp_async xt_policy; do modprobe "$m" 2>/dev/null || true; done
+printf '%s\n' ppp_generic ppp_async xt_policy tun > /etc/modules-load.d/zarrin.conf
+for m in ppp_generic ppp_async xt_policy tun; do modprobe "$m" 2>/dev/null || true; done
 [ -c /dev/ppp ] || mknod /dev/ppp c 108 0
 
 say "Downloading the agent from the panel"

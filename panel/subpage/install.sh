@@ -5,19 +5,23 @@ set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
 MODE=add; [ "$1" = "--remove" ] && { MODE=remove; shift; }
 T=${1:-/var/lib/pasarguard/templates/subscription/index.html}
-# The shared VPN domain and the L2TP key come from Zarrin's settings.
-SERVER=$(docker exec zarrin python -m zarrin.cli get ikev2_domain 2>/dev/null || true)
-PSK=$(docker exec zarrin python -m zarrin.cli get l2tp_psk 2>/dev/null || true)
-if [ "$MODE" = add ] && { [ -z "$SERVER" ] || [ -z "$PSK" ]; }; then
+# The shared VPN domain, the L2TP key and the OpenVPN profiles come from Zarrin.
+VALUES=$(docker exec zarrin python -m zarrin.cli card-values 2>/dev/null || true)
+if [ "$MODE" = add ] && ! printf '%s' "$VALUES" | python3 -c 'import json,sys; v=json.load(sys.stdin); sys.exit(0 if v["server"] and v["psk"] else 1)' 2>/dev/null; then
   echo "Zarrin is not running or the VPN domain / L2TP key is not set"; exit 1
 fi
 cp "$T" "$T.bak-ikev2-$(date +%Y%m%d-%H%M%S)"
 # Keep the five newest copies of the template.
 ls -t "$T".bak-ikev2-* 2>/dev/null | tail -n +6 | xargs -r rm -f
-python3 - "$T" "$DIR/ikev2-card.html" "$MODE" "$DIR/ikev2-head.html" "$SERVER" "$PSK" <<'PY'
-import re, sys
-path, card, mode, head, server, psk = sys.argv[1:7]
-fill = lambda text: text.replace("__VPN_SERVER__", server).replace("__L2TP_PSK__", psk)
+python3 - "$T" "$DIR/ikev2-card.html" "$MODE" "$DIR/ikev2-head.html" "${VALUES:-{\}}" <<'PY'
+import json, re, sys
+path, card, mode, head, values = sys.argv[1:6]
+v = json.loads(values or "{}")
+# Inside <script>: a JSON literal, with "</" escaped so nothing can close the tag.
+ovpn = json.dumps({"udp": v.get("ovpn_udp", ""), "tcp": v.get("ovpn_tcp", "")}).replace("</", "<\\/")
+def fill(text):
+    return (text.replace("__VPN_SERVER__", v.get("server", "")).replace("__L2TP_PSK__", v.get("psk", ""))
+            .replace("__OVPN_JSON__", ovpn))
 s = open(path, encoding="utf-8").read()
 s = re.sub(r"<!-- pg-ikev2 start.*?<!-- pg-ikev2 end -->\n?", "", s, flags=re.S)
 s = re.sub(r"<!-- pg-ikev2-head start.*?<!-- pg-ikev2-head end -->\n?", "", s, flags=re.S)

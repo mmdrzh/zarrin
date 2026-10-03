@@ -132,6 +132,33 @@ ol.steps .c{color:var(--acc)}
     <ol class="steps" id="l2steps"></ol>
   </details>
 
+  <details class="guide" id="ovpn"><summary>OpenVPN · همه‌ی دستگاه‌ها (با برنامه)</summary>
+    <div class="tiles" style="margin-bottom:10px">
+      <a class="tile" href="#" data-ovpn="udp">
+        <span class="tile-ic imp">U</span>
+        <span class="tile-t"><b>فایل UDP</b><small>سریع‌تر؛ اول این را امتحان کنید</small></span>
+        <span class="go">دانلود</span>
+      </a>
+      <a class="tile" href="#" data-ovpn="tcp">
+        <span class="tile-ic imp">T</span>
+        <span class="tile-t"><b>فایل TCP</b><small>اگر UDP وصل نشد</small></span>
+        <span class="go">دانلود</span>
+      </a>
+    </div>
+    <div class="kv" style="margin-bottom:10px">
+      <div class="r"><span class="k">نام کاربری</span><span class="v mono">{{ user.username }}</span><button class="copy" type="button" data-copy="{{ user.username }}">کپی</button></div>
+      <div class="r"><span class="k">رمز</span><span class="v mono">{{ pgik.pw }}</span><button class="copy" type="button" data-copy="{{ pgik.pw }}">کپی</button></div>
+    </div>
+    <ol class="steps">
+      <li>برنامه‌ی <b>OpenVPN Connect</b> را نصب کنید:
+        <a href="https://apps.apple.com/app/openvpn-connect/id590379981" target="_blank" rel="noopener">آیفون</a> ·
+        <a href="https://play.google.com/store/apps/details?id=net.openvpn.openvpn" target="_blank" rel="noopener">اندروید</a> ·
+        <a href="https://openvpn.net/client/" target="_blank" rel="noopener">ویندوز و مک</a></li>
+      <li>یکی از فایل‌های بالا را دانلود و در برنامه <span class="c">Import</span> کنید (روی آیفون: بعد از دانلود، Share › OpenVPN).</li>
+      <li>نام کاربری و رمز بالا را وارد کنید و <span class="c">Connect</span> را بزنید.</li>
+    </ol>
+  </details>
+
   <p class="foot">رمز مخصوص اکانت خودته؛ به کسی نده.</p>
   </div>
 
@@ -148,6 +175,14 @@ ol.steps .c{color:var(--acc)}
     d.getElementById("steps").innerHTML = guides[k].map(function(s){ return "<li>" + s + "</li>"; }).join(""); }
   root.querySelectorAll(".seg [data-os]").forEach(function(b){ b.onclick = function(){ show(b.dataset.os); }; });
   show(/Android/.test(navigator.userAgent) ? "android" : /Windows/.test(navigator.userAgent) ? "win" : "ios");
+
+  // OpenVPN: the profile is the same for every user (username/password login).
+  var OVPN = __OVPN_JSON__;
+  root.querySelectorAll("[data-ovpn]").forEach(function(a){ var k = a.dataset.ovpn;
+    if (!OVPN[k]) { a.style.display = "none"; return; }
+    a.onclick = function(e){ e.preventDefault(); var b = d.createElement("a");
+      b.href = URL.createObjectURL(new Blob([OVPN[k]], {type: "application/x-openvpn-profile"}));
+      b.download = SERVER + "-" + k + ".ovpn"; d.body.appendChild(b); b.click(); b.remove(); }; });
 
   // L2TP/IPsec: same username and password, plus the shared key.
   var PSK = "__L2TP_PSK__", REG = "reg add HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent /v AssumeUDPEncapsulationContextOnSendRule /t REG_DWORD /d 2 /f";

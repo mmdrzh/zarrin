@@ -1,6 +1,6 @@
 """Zarrin node agent.
 
-Runs the VPN services (IKEv2 and L2TP/IPsec; OpenVPN plugs in the same way)
+Runs the VPN services (IKEv2, L2TP/IPsec, OpenVPN over UDP and TCP)
 in the host's network namespace, beside PasarGuard's node and never
 touching it. It keeps the allowed users in step with the panel (a new user can
 connect within seconds), hangs up anyone no longer allowed, and reports who is
@@ -21,10 +21,11 @@ from . import acme, firewall
 from .charon import charon
 from .ikev2 import IKEv2
 from .l2tp import L2TP
+from .openvpn import OpenVPN
 from .panel import panel
 from .usage import Usage
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 log = logging.getLogger("zarrin.agent")
@@ -41,7 +42,8 @@ class Agent:
         self.stop = threading.Event()
         self.ikev2 = IKEv2()
         self.l2tp = L2TP()
-        self.services = [self.ikev2, self.l2tp]
+        self.openvpn = OpenVPN()
+        self.services = [self.ikev2, self.l2tp, self.openvpn]
         self.usage = Usage()
         self.cfg: dict = {}
         self.users: dict[str, str] = {}
@@ -55,7 +57,10 @@ class Agent:
         """Turns each service on, off or restarts it to match the panel."""
         dns = cfg.get("dns", "8.8.8.8,1.1.1.1")
         wanted = {svc.name: (cfg.get(svc.name) or {}) for svc in self.services}
-        pools = [w["pool"] for w in wanted.values() if w.get("enabled")]
+        pools = []
+        for w in wanted.values():
+            if w.get("enabled"):
+                pools += [w[k] for k in ("pool", "pool_udp", "pool_tcp") if w.get(k)]
         firewall.ensure(pools, l2tp=bool(wanted["l2tp"].get("enabled")))
         for svc in self.services:
             want = wanted[svc.name]

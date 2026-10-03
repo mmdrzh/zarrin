@@ -6,10 +6,10 @@ import time
 import pyotp
 import segno
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
-from . import backup, certs, cloudflare, config, telegram
+from . import backup, certs, cloudflare, config, ovpn, telegram
 from .api_agent import create_join_token, join_command
 from .auth import (authenticate, clear_session_cookie, client_ip, current_admin, hash_password, issue_session,
                    set_session_cookie, totp_ok, totp_uri, verify_password)
@@ -308,12 +308,23 @@ async def users(q: str = "", admin=Admin):
 @router.get("/connection-info")
 async def connection_info(admin=Admin):
     """What a user needs besides username and password, for the user page."""
-    return {"server": await store.get("ikev2_domain"), "l2tp_psk": await store.get("l2tp_psk")}
+    udp, tcp = await ovpn.ports()
+    return {"server": await store.get("ikev2_domain"), "l2tp_psk": await store.get("l2tp_psk"),
+            "ovpn_udp_port": udp, "ovpn_tcp_port": tcp}
+
+
+@router.get("/openvpn/{proto}.ovpn")
+async def openvpn_profile(proto: str, admin=Admin):
+    if proto not in ("udp", "tcp"):
+        raise HTTPException(404)
+    server = await store.get("ikev2_domain")
+    return PlainTextResponse(await ovpn.profile(proto, server), media_type="application/x-openvpn-profile",
+                             headers={"Content-Disposition": f'attachment; filename="{server}-{proto}.ovpn"'})
 
 
 # --------------------------------------------------------------- settings
 
-EDITABLE = {"ikev2_domain", "dns", "l2tp_psk", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
+EDITABLE = {"ikev2_domain", "dns", "l2tp_psk", "ovpn_udp_port", "ovpn_tcp_port", "telegram_bot_token", "telegram_chat_id", "telegram_proxy",
             "backup_interval_hours", "backup_keep", "pasarguard_api_key"}
 
 
@@ -345,6 +356,10 @@ async def put_settings(body: dict, request: Request, admin=Admin):
             value = max(0.0, min(168.0, float(value or 0)))
         elif key == "backup_keep":
             value = max(1, min(500, int(value or 24)))
+        elif key in ("ovpn_udp_port", "ovpn_tcp_port"):
+            value = int(value or 0)
+            if not 0 <= value <= 65535:
+                raise HTTPException(400, "پورت نامعتبر است")
         elif key == "l2tp_psk":
             value = str(value or "").strip()
             if not (8 <= len(value) <= 64) or not value.isascii() or '"' in value or " " in value:
@@ -356,7 +371,7 @@ async def put_settings(body: dict, request: Request, admin=Admin):
         await store.set(key, value)
         changed.append(key)
     await store.audit(admin["username"], client_ip(request), "settings.update", ",".join(changed))
-    if {"ikev2_domain", "l2tp_psk"} & set(changed):
+    if {"ikev2_domain", "l2tp_psk", "ovpn_udp_port", "ovpn_tcp_port"} & set(changed):
         request_subpage_refresh()
     return {"ok": True, "changed": changed}
 

@@ -74,6 +74,8 @@ DEFAULTS: dict[str, Any] = {
     "ikev2_domain": "",
     "dns": "8.8.8.8,1.1.1.1",
     "l2tp_psk": "",
+    "ovpn_udp_port": 1194,
+    "ovpn_tcp_port": 443,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
     "telegram_proxy": "",

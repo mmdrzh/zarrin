@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import api_admin, api_agent, backup, certs, config
+from . import api_admin, api_agent, backup, certs, config, ovpn
 from .legacy import legacy_app, sub_router
 from .pg import pg
 from .store import store
@@ -92,6 +92,7 @@ async def run() -> None:
         # Letters and digits only, without look-alikes, so it is easy to type.
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
         await store.set("l2tp_psk", "".join(secrets.choice(alphabet) for _ in range(12)))
+    await ovpn.pki()  # made once, shared by every node
     certs.ensure_present()
 
     main_cfg = uvicorn.Config(main_app(), host="0.0.0.0", port=config.PORT, ssl_certfile=str(certs.FULLCHAIN),

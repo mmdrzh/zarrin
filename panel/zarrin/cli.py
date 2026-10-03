@@ -5,6 +5,7 @@
   python -m zarrin.cli import-legacy <env>    take over nodes from an old pg-ikev2 bridge .env
   python -m zarrin.cli set <key> <json value> change a setting
   python -m zarrin.cli get <key>              print a setting
+  python -m zarrin.cli card-values            JSON the subscription page card is filled with
 """
 
 import asyncio
@@ -102,6 +103,20 @@ async def cmd_get(key: str) -> None:
     print(value if isinstance(value, str) else json.dumps(value))
 
 
+async def cmd_card_values() -> None:
+    from . import ovpn
+    await store.open()
+    server = await store.get("ikev2_domain") or ""
+    udp, tcp = await ovpn.ports()
+    print(json.dumps({
+        "server": server,
+        "psk": await store.get("l2tp_psk") or "",
+        "ovpn_udp": await ovpn.profile("udp", server) if udp else "",
+        "ovpn_tcp": await ovpn.profile("tcp", server) if tcp else "",
+    }))
+    await store.close()
+
+
 def main() -> None:
     args = sys.argv[1:]
     if len(args) == 2 and args[0] == "admin":
@@ -110,6 +125,8 @@ def main() -> None:
         asyncio.run(cmd_grant())
     elif len(args) == 2 and args[0] == "import-legacy":
         asyncio.run(cmd_import_legacy(args[1]))
+    elif args == ["card-values"]:
+        asyncio.run(cmd_card_values())
     elif len(args) == 2 and args[0] == "get":
         asyncio.run(cmd_get(args[1]))
     elif len(args) == 3 and args[0] == "set":
